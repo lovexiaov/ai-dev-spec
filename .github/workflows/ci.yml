@@ -1,0 +1,47 @@
+name: CI Gates
+# 要点 3 的「硬约束」：把人工 review 难转成机器先守门。
+# PR 任一阶段失败即阻断合并；与 AGENTS.md 的软约束保持一致。
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Unit / Acceptance tests
+        run: pnpm test -- --bail
+        # 必须覆盖 docs/specs/<feature>/spec.md 的验收条件
+
+      - name: Build
+        run: pnpm build
+
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Secret scan
+        uses: gitleaks/gitleaks-action@v2
+        # 兜底：任何密钥泄露直接失败（对应 AGENTS.md NEVER 提交凭据）
+      - name: Dependency audit
+        run: pnpm audit --frozen-lockfile

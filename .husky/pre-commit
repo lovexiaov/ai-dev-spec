@@ -1,0 +1,23 @@
+#!/usr/bin/env sh
+# pre-commit 硬约束（husky）
+# 对应 AGENTS.md NEVER「提交密钥/.env」与「禁止 console.log 做生产日志」。
+# 覆盖任何工具（Claude / Cursor / WorkBuddy / 人）发出的 git commit。
+
+staged_files=$(git diff --cached --name-only --diff-filter=ACM)
+
+# 1) 拦截凭据 / 密钥文件被暂存（放行 .env.example）
+echo "🔍 [pre-commit] 扫描密钥与 .env 文件 ..."
+if printf '%s\n' "$staged_files" | grep -E '(^|/)\.env$|(^|/)\.env\.[^e][^x]|secrets?\.json$|id_rsa|\.pem$' | grep -v '\.env\.example$'; then
+  echo "❌ 拒绝提交疑似密钥/凭据文件（.env / secrets.json / id_rsa / .pem）。请改用环境变量或密钥管理。"
+  exit 1
+fi
+
+# 2) 扫描暂存内容里的密钥特征（兜底，防手滑把 token 写进代码）
+if git diff --cached -U0 | grep -Ei '^(+| )' | grep -Ei '(AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{36}|xox[baprs]-[A-Za-z0-9-]+|sk-[A-Za-z0-9]{32,}|-----BEGIN [A-Z ]*PRIVATE KEY-----|AIza[0-9A-Za-z_-]{35})'; then
+  echo "❌ 检测到疑似密钥内容泄露，提交被拒绝。请移除凭据后重试。"
+  exit 1
+fi
+
+# 3) 对暂存文件跑 lint-staged：ESLint（含 no-console 强制）+ Prettier 格式化
+echo "🧹 [pre-commit] 运行 lint-staged ..."
+pnpm exec lint-staged

@@ -1,0 +1,26 @@
+{
+  "name": "@scaffold/observability",
+  "version": "0.1.0",
+  "description": "结构化日志、追踪与前端可观测核心包（AI 主导开发范式下的「看得见、追得清」底座）",
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./frontend": "./src/frontend/index.tsx"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "peerDependencies": {
+    "react": ">=18"
+  },
+  "devDependencies": {
+    "@types/react": "^18.0.0",
+    "typescript": "^5.4.0",
+    "vitest": "^1.6.0"
+  },
+  "license": "MIT"
+}

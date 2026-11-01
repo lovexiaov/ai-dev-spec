@@ -1,0 +1,3 @@
+[submodule "logging-framework/macos/AgentLog"]
+	path = logging-framework/macos/AgentLog
+	url = https://github.com/lovexiaov/agent-log-macos.git

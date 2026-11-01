@@ -1,0 +1,16 @@
+#!/usr/bin/env sh
+# pre-push 硬约束（husky）
+# 推送前最后一道本地门：typecheck + 测试必须通过，否则拒绝 push。
+# 对应 AGENTS.md §2「提交前必须跑通」与 constitution §4「测试即验收」。
+
+echo "🚀 [pre-push] 跑通 typecheck + test ..."
+pnpm typecheck
+pnpm test
+
+# 进度可交接提醒（不阻断）：本分支改了 src/ 却在提交历史里未见 handoff/checkpoint 时提示
+if git diff --name-only origin/main...HEAD 2>/dev/null | grep -q '^src/' 2>/dev/null; then
+  if ! git log origin/main..HEAD --oneline 2>/dev/null | grep -qi 'handoff\|state checkpoint'; then
+    echo "⚠️  提醒：本分支改动了 src/ 但提交历史未见 handoff / state checkpoint，"
+    echo "    合并前请按 AGENTS.md §7 更新 docs/specs/<feature>/handoff.md 并提交 chore: state checkpoint。"
+  fi
+fi

@@ -1,0 +1,5 @@
+#!/usr/bin/env sh
+# commit-msg 硬约束（husky）
+# 强制 Conventional Commits：feat:/fix:/refactor:/test:/docs:/chore:
+# 对应 AGENTS.md §6。违反即拒绝提交。
+pnpm exec commitlint --edit "$1"
