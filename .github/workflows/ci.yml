@@ -54,7 +54,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: pnpm
+          # 此处不设 cache：security job 不装依赖，pnpm store 目录不存在，
+          # setup-node 的 post 步骤保存缓存时会报 Path Validation Error 并让 job 失败。
 
       - name: Secret scan
         uses: gitleaks/gitleaks-action@v2
