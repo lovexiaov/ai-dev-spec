@@ -58,7 +58,7 @@ export class ErrorBoundary extends React.Component<
   override componentDidCatch(error: Error, info: React.ErrorInfo): void {
     this.props.logger.error("react_render_error", {
       event: "react_error",
-      message: error.message,
+      error_message: error.message,
       stack: error.stack,
       componentStack: info.componentStack,
     });

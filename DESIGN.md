@@ -18,7 +18,7 @@
 
 - **AI 生成代码带来新的可观测性挑战**：结构化日志、分布式追踪、一致的错误处理「不可妥协」（altersquare.io、skills.cat observability skill）。
 - **前端要「可观测优先」**：前端通过可观察的 DOM/状态无意中暴露了「隐式 API」，Agent 会去消费它们；一旦出错，人类看不到、Agent 无法「刷新重试」，必须有结构化反馈（techsheet.vercel.app《Resilient Front-End Architectures for the AI-Augmented SDLC》）。
-- **结构化日志的字段规范**：生产环境输出 JSON，固定字段 `timestamp / level / message / service / env / traceId / userId` + 事件上下文；密钥必须脱敏；开发环境才可读（skills.cat、getlockstep.dev）。
+- **结构化日志的字段规范**：生产环境输出 JSON，固定字段统一由 **Schema v1** 定义（见 `docs/logging-framework/schema/log-event.schema.json`）：`ts / level / service / event_type / session_id / agent_auto / message` 必填，`trace_id / subsystem / category / env / user_id / payload` 可选；密钥必须脱敏；开发环境才可读（skills.cat、getlockstep.dev）。
 - **前端 AI 交互要记录生命周期事件**：`ai_request_initiated`、`ai_tool_call_initiated/completed`、`ai_response_received`、`ai_guardrail_triggered`、`ai_error`——带 `userId / sessionId / model / tokenUsage`（aivoid.dev 第 13 章）。
 - **追踪与指标**：用 OpenTelemetry 打通 frontend → API → DB；RED 指标（Rate/Errors/Duration p50–p99）；前端 + 后端都接 Sentry 并上传 source map；`/health`、`/ready` 健康检查（skills.cat、kwkr.cn 前端转大模型实战）。
 - **收益**：投资专业可观测平台后，AI/数据系统宕机时间可降约 80%（altersquare.io）。
@@ -126,6 +126,7 @@ ai-dev-spec/                         # 脚手架根（= 你的项目根）
 ## 四、关键配置文件说明
 
 ### 1. `AGENTS.md`（全局治理 / 软约束）— 要点 3
+
 - **Project Overview & Commands**：技术栈、构建/测试/lint 命令（Agent 自己发现不了的，才写）。
 - **Negative Constraints**：`NEVER 提交密钥`、`.env 不入库`、`legacy/ 目录禁止改动`、`非本包文件删除前先问`。
 - **三层边界（Three-tier）**：`ALWAYS` / `ASK FIRST` / `NEVER` 显式分区，把「别做什么」讲清楚。
@@ -133,22 +134,27 @@ ai-dev-spec/                         # 脚手架根（= 你的项目根）
 - **Routing**：指向 `docs/constitution.md` 与 `.agents/` 人格（如采用多 Agent），保持本文件精简。
 
 ### 2. `docs/constitution.md`（项目宪法）— 要点 1 + 3
+
 - 记录不可谈判的原则（如「所有外部调用必须带 traceId」「前端错误必须上报 Sentry」「PR 必须小」）。
 - 与 `AGENTS.md` 的区别：AGENTS.md 是「怎么跟 Agent 协作」，constitution 是「这个项目信奉什么」，由人owner 维护。
 
 ### 3. `docs/specs/_template/*`（特性规范三件套）— 要点 1 + 3
+
 - `spec.md`：Goal / Non-goals / Constraints / Interfaces / **Acceptance Criteria（可测）** / Done-when。
 - `plan.md`：只写本次实现真正用到的设计决策（模块边界、数据流、必须 break 的旧路径），末尾留 `## ✅ Human Approval` 区块。
 - `tasks.md`：每个任务拆到「改哪些文件 + 跑哪些验证命令 + 完成判定」，可勾选。
 
 ### 4. `config/logging.config.ts`（可观测配置）— 要点 2
+
 - 集中定义日志级别、脱敏字段路径（如 `password/token/authorization`）、sink（stdout / Sentry / 远端日志服务）、是否在浏览器端采样。
 
 ### 5. `.github/workflows/ci.yml`（硬性闸门）— 要点 3
+
 - PR 触发：`lint → typecheck → 单元测试（含 spec 验收测试）→ 安全扫描（secret/依赖审计）→ 构建`。
 - 任一失败即阻断合并，等价于把「人工 review 难」转成「机器先守门」。
 
 ### 6. `docs/specs/<feature>/handoff.md`（交接文档）— 要点 4
+
 - 每个特性一份，记录：目标 / 当前状态 / 已完成且已验证的工作 / 阻塞项 / 下一步 / 改动文件 / 已跑命令与结果 / 关键决策。
 - **Clock-in 例程**：新 Agent 启动时先读 `handoff.md` + `docs/decisions/` + `git log` 再动手。
 - **Clock-out 例程**：下班前更新 `handoff.md`、跑通 `pnpm lint && pnpm typecheck && pnpm test`、提交 `chore: state checkpoint`。
@@ -161,33 +167,36 @@ ai-dev-spec/                         # 脚手架根（= 你的项目根）
 > 本层把要点 3 的约束从「文档建议」升级为「机器强制」，分三道本地硬门：
 
 **① Git Hooks（husky）—— 对任何 AI 工具都生效的本地第一道门**
+
 - `.husky/pre-commit`：拦截 `.env`/密钥文件与密钥内容（兜底 AGENTS.md NEVER）→ 跑 `lint-staged`（ESLint 含 `no-console` 强制 + Prettier 格式化）。
 - `.husky/commit-msg`：`commitlint` 强制 Conventional Commits（feat/fix/...）。
 - `.husky/pre-push`：`pnpm typecheck && pnpm test` 必须全绿；并提醒未更新 `handoff.md` 的分支。
 - 之所以放 Git 层：**不依赖具体 Agent 工具**——无论 Claude / Cursor / WorkBuddy / 人，只要 `git commit` 就会被拦。
 
 **② Agent Hooks（`.claude/settings.json` + `scripts/hooks/*.mjs`）—— 在 tool-use 层面拦截**
+
 - `PreToolUse` on `Edit|Write|MultiEdit` → `check-plan.mjs`：改 `src/` 前，仓库内必须存在**已勾选 ✅ 批准**的 `plan.md`；否则直接 `exit 2` 阻断并给出修复步骤（紧急绕过 `SKIP_PLAN_CHECK=1`）。
 - `PreToolUse` on `Bash` → `guard-bash.mjs`：拦截 `rm -rf /`、`git push --force`、`git reset --hard`、`git clean -fdx`、`sudo`、fork-bomb 等不可逆/高危命令。
 - `PostToolUse` on `Edit|Write|MultiEdit` → `lint-touched.mjs`：每改完一个代码文件立刻跑 ESLint，把错误暴露给 Agent 迫使其当场自纠（ESLint 未装时优雅跳过）。
 - 注：此处以 **Claude Code 的 hook 格式** 为参考实现；Cursor 暂无等价命令钩子，靠 Git Hooks + rules 兜底；WorkBuddy 钩子由环境托管，逻辑可平移。
 
 **③ 根工程配置让约束「可执行」**
+
 - `package.json` 提供 `lint/typecheck/test` 脚本载体（此前缺失，导致 CI 里的 `pnpm lint` 是空壳）。
 - `eslint.config.js` 把「禁止 console.log 做生产日志」落成 `@typescript-eslint/no-console: error`（仅放行 `warn/error` 兜底），`commitlint.config.js` 落 commit 规范，`tsconfig.base.json` 兜底 TS 严格。
 - 前端 `frontend/index.tsx` 唯一的 `console.log` 是浏览器无端点时的最后兜底，已用 `eslint-disable` 显式标注。
 
 **强制力对照（与原方案相比）**
 
-| 约束内容（来自 AGENTS.md / constitution） | 原实现 | 现在如何强制 |
-|---|---|---|
-| 禁 `console.log` 做生产日志 | 仅文档 | ESLint error + lint-staged（pre-commit）+ PostToolUse 实时拦截 |
-| 提交前跑 lint/typecheck/test | 仅文档 | pre-commit（lint-staged）+ pre-push（typecheck+test） |
-| Conventional Commits | 仅文档 | commit-msg hook（commitlint） |
-| NEVER 提交密钥/.env | 仅文档 + 远端 gitleaks | pre-commit 本地拦截（文件 + 内容扫描）+ 远端 gitleaks 双保险 |
-| 改 src/ 前需 plan 批准 | 仅文档（可自欺） | Agent Hook PreToolUse 直接阻断 |
-| 不可逆命令需人确认 | 仅文档 | Agent Hook PreToolUse 直接阻断 |
-| 进度写 handoff | 仅文档 | pre-push 提醒 + 仍建议 AGENTS.md §7 Clock-out |
+| 约束内容（来自 AGENTS.md / constitution） | 原实现                 | 现在如何强制                                                   |
+| ----------------------------------------- | ---------------------- | -------------------------------------------------------------- |
+| 禁 `console.log` 做生产日志               | 仅文档                 | ESLint error + lint-staged（pre-commit）+ PostToolUse 实时拦截 |
+| 提交前跑 lint/typecheck/test              | 仅文档                 | pre-commit（lint-staged）+ pre-push（typecheck+test）          |
+| Conventional Commits                      | 仅文档                 | commit-msg hook（commitlint）                                  |
+| NEVER 提交密钥/.env                       | 仅文档 + 远端 gitleaks | pre-commit 本地拦截（文件 + 内容扫描）+ 远端 gitleaks 双保险   |
+| 改 src/ 前需 plan 批准                    | 仅文档（可自欺）       | Agent Hook PreToolUse 直接阻断                                 |
+| 不可逆命令需人确认                        | 仅文档                 | Agent Hook PreToolUse 直接阻断                                 |
+| 进度写 handoff                            | 仅文档                 | pre-push 提醒 + 仍建议 AGENTS.md §7 Clock-out                  |
 
 ---
 
@@ -196,7 +205,7 @@ ai-dev-spec/                         # 脚手架根（= 你的项目根）
 设计目标：让前端 / 后端在 AI 主导开发下「看得见、追得清、可回放」。
 
 1. **统一结构化日志（`logger.ts`）**
-   - 输出固定字段：`timestamp, level, message, service, env, traceId, userId, event`。
+   - 输出固定字段（Schema v1 线格式，snake_case）：`ts, level, service, event_type, session_id, agent_auto, message` + 可选 `trace_id / subsystem / category / env / user_id / payload`。`LogEvent` 类型即线格式，调用侧仍用 `event / traceId / userId` 等 camelCase 书写，由 logger 在序列化边界映射。
    - 内置脱敏处理器：在 logger 层拦截 `password/token/authorization/PII` 字段，绝不依赖调用方自觉。
    - 日志走 stdout（容器/平台采集），生产为 JSON、开发为可读文本。
 2. **追踪传播（`trace.ts`）**
@@ -217,12 +226,12 @@ ai-dev-spec/                         # 脚手架根（= 你的项目根）
 
 ## 六、三要点 → 脚手架落实映射表
 
-| 关键注意点 | 脚手架落点 | 对应文件 / 模块 |
-|---|---|---|
-| 1. 人=需求提供者+决策者 | 规范先于代码 + 人工闸门 | `docs/specs/_template/{spec,plan,tasks}.md`、`AGENTS.md` 的 Human Gates、`constitution.md` |
-| 2. 日志 / 可观测（尤其前端） | 自带可观测核心包 | `packages/observability/`、`config/logging.config.ts`、CI 中的构建/类型门禁 |
-| 3. 约束 AI + 明确验收 | 软约束(治理文件)+**三层硬门禁**(Git/Agent Hooks + CI)+可测验收 | `AGENTS.md`(三层边界)、`eslint.config.js`/`commitlint.config.js`(规则落地)、`.husky/`(Git Hooks)、`.claude/settings.json`+`scripts/hooks/`(Agent Hooks)、`.github/workflows/ci.yml`、`tests/`、`spec.md` 验收清单 |
-| 4. 进度可观测/可跟踪/可换人 | 状态外置+交接文档+Git检查点+Clock例程+进度日志 | `docs/specs/<feature>/handoff.md`、`tasks.md`(状态/证据)、`AGENTS.md`(Clock-in/out)、`packages/observability` 的 `agent-events.ts`、Git 提交信息 |
+| 关键注意点                   | 脚手架落点                                                     | 对应文件 / 模块                                                                                                                                                                                                   |
+| ---------------------------- | -------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. 人=需求提供者+决策者      | 规范先于代码 + 人工闸门                                        | `docs/specs/_template/{spec,plan,tasks}.md`、`AGENTS.md` 的 Human Gates、`constitution.md`                                                                                                                        |
+| 2. 日志 / 可观测（尤其前端） | 自带可观测核心包                                               | `packages/observability/`、`config/logging.config.ts`、CI 中的构建/类型门禁                                                                                                                                       |
+| 3. 约束 AI + 明确验收        | 软约束(治理文件)+**三层硬门禁**(Git/Agent Hooks + CI)+可测验收 | `AGENTS.md`(三层边界)、`eslint.config.js`/`commitlint.config.js`(规则落地)、`.husky/`(Git Hooks)、`.claude/settings.json`+`scripts/hooks/`(Agent Hooks)、`.github/workflows/ci.yml`、`tests/`、`spec.md` 验收清单 |
+| 4. 进度可观测/可跟踪/可换人  | 状态外置+交接文档+Git检查点+Clock例程+进度日志                 | `docs/specs/<feature>/handoff.md`、`tasks.md`(状态/证据)、`AGENTS.md`(Clock-in/out)、`packages/observability` 的 `agent-events.ts`、Git 提交信息                                                                  |
 
 ---
 
@@ -232,13 +241,14 @@ ai-dev-spec/                         # 脚手架根（= 你的项目根）
 2. **先写 constitution，再写第一个 spec**：强制走 `spec → plan(人批) → tasks → 实现` 四步。
 3. **AGENTS.md 当「伤疤」写**：每次 Agent 犯错的纠正，沉淀成一条规则；超过 200 行就下沉到 `docs/` 或 `.agents/`（getlockstep.dev 的维护哲学）。
 4. **可观测先接入再写功能**：项目第一天就把 `observability` 接上 Sentry/stdout，避免「上线才崩、查无日志」。
-4.5. **强制约束靠 Hooks 生效**：`git init` 后执行 `pnpm install`，husky 自动激活三道 Git Hooks；使用 Claude Code 会自动加载 `.claude/settings.json` 的 Agent Hooks。此后「禁 console.log / 必须 plan 批准才改 src / 高危命令拦截」都是机器守门，AI 绕不过。
+   4.5. **强制约束靠 Hooks 生效**：`git init` 后执行 `pnpm install`，husky 自动激活三道 Git Hooks；使用 Claude Code 会自动加载 `.claude/settings.json` 的 Agent Hooks。此后「禁 console.log / 必须 plan 批准才改 src / 高危命令拦截」都是机器守门，AI 绕不过。
 5. **小 PR + 机器守门**：把 review 负担从「人肉眼 Diff」转移到「CI 强制 + reviewer 子 Agent 二审」，人只管「意图与边界」。
 6. **每次收工即交接**：强制 Clock-out——更新 `handoff.md` + 提交 checkpoint。这样随时能换一个新 Agent（或换工具 / 换机器）接手，上下文零丢失；并行任务用 git worktree 隔离。
 
 ---
 
 ### 主要参考来源
+
 - intent-driven.dev《Best Practices for Spec-Driven Development》
 - mondaymomentum.io《The New Developer Playbook》(OpenAI/Anthropic/Cursor 共识)
 - zooz.com《The End of Infinite Context: Engineering Reliability in the Age of Agentic Workflows》
