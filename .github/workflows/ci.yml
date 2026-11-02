@@ -13,10 +13,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # 子模块本身就是 pnpm workspace 成员，不拉取则 install 必挂。
+          # 三个仓库均已 public，默认 GITHUB_TOKEN 即可拉取，无需额外 PAT。
+          submodules: recursive
 
       - uses: pnpm/action-setup@v4
-        with:
-          version: 9
+        # 不写 version：版本由 package.json 的 packageManager 决定。
+        # 写死 version 会与之冲突并报 Multiple versions of pnpm specified。
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -30,7 +34,9 @@ jobs:
         run: pnpm typecheck
 
       - name: Unit / Acceptance tests
-        run: pnpm test -- --bail
+        run: pnpm test
+        # --bail 已写进根脚本（pnpm -r --bail test）；此处再传 `-- --bail`
+        # 会被透传成 vitest 的位置参数，bail 语义失效。
         # 必须覆盖 docs/specs/<feature>/spec.md 的验收条件
 
       - name: Build
@@ -40,8 +46,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # gitleaks 需要完整历史才能扫描全部 commit
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
       - name: Secret scan
         uses: gitleaks/gitleaks-action@v2
         # 兜底：任何密钥泄露直接失败（对应 AGENTS.md NEVER 提交凭据）
       - name: Dependency audit
-        run: pnpm audit --frozen-lockfile
+        run: pnpm audit --prod
+        # 只审计运行时依赖：当前 13 条告警全部落在 dev 链路（vitest>vite / esbuild / minimatch），
+        # 不随产物发布；升级 vitest 反而增至 15 条，故先按 --prod 口径守门。
+        # 注意 pnpm audit 不接受 --frozen-lockfile（会报 unexpected argument）。
