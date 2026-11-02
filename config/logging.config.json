@@ -1,0 +1,18 @@
+{
+  "$schema": "./logging.config.schema.json",
+  "format": "json",
+  "level": "info",
+  "service": "ai-dev-spec",
+  "env": "production",
+  "redactPaths": [
+    "password",
+    "token",
+    "authorization",
+    "secret",
+    "apiKey",
+    "user.email",
+    "user.phone"
+  ],
+  "sentry": { "enabled": false },
+  "browser": { "enabled": false, "sampleRate": 0.1 }
+}
