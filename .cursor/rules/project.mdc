@@ -9,7 +9,7 @@ alwaysApply: true
 补充 Cursor 专属约定：
 - 改动 `src/` 前，确认 `docs/specs/<feature>/plan.md` 已含「✅ Human Approval」区块。
 - 引入新依赖前，在对话中说明原因；删除跨目录文件前先询问。
-- 所有日志/外部调用使用 `packages/observability`，不要用 `console.log` 做生产日志。
+- 所有日志/外部调用使用 `@scaffold/observability`（submodule `logging-framework/web/Observability`），不要用 `console.log` 做生产日志。
 - 每次生成代码后，主动运行 `pnpm lint && pnpm typecheck && pnpm test`，失败先自修。
 - 收工前更新 `docs/specs/<feature>/handoff.md`（进度/阻塞/下一步/已跑命令结果）并提交 `chore: state checkpoint`；开工先读它，换 Agent 不断上下文。
 - **强制约束靠 Git Hooks 兜底**：Cursor 暂无命令级 Agent Hook，但 `.husky/` 的三道 Git Hooks（pre-commit 拦密钥+ESLint、commit-msg 强制规范、pre-push 跑通校验）在 `git commit/push` 时对任意工具生效，请保持提交规范、勿绕过。

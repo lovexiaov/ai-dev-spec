@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Agent Hook（Claude Code 参考实现）：PostToolUse on Edit|Write|MultiEdit
-// 强制约束：Agent 每改完一个代码文件，立刻跑 ESLint（含 @typescript-eslint/no-console 等强制规则）。
+// 强制约束：Agent 每改完一个代码文件，立刻跑 ESLint（含 no-console 等强制规则）。
 // 若发现错误，把错误暴露给 Agent 并阻断该步，迫使它当场自纠——
 // 把 AGENTS.md「禁止 console.log 做生产日志」「优先复用已有模式」从口号变成写码时的实时门禁。
 //

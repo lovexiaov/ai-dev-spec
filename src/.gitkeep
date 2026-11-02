@@ -1,0 +1,2 @@
+# 业务代码根目录（受 .claude Agent Hook check-plan.mjs 强制门禁约束）。
+# 改动 src/ 前必须存在已勾选 ✅ 批准的 docs/specs/<feature>/plan.md。
