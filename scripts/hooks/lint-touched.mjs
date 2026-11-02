@@ -6,38 +6,41 @@
 //
 // ESLint 未安装（如尚未 pnpm install）时优雅跳过，不阻断。
 
-import { readFileSync, existsSync } from 'node:fs';
-import { execFileSync } from 'node:child_process';
+import { readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 
 function main() {
   let payload;
   try {
-    payload = JSON.parse(readFileSync(0, 'utf8'));
+    payload = JSON.parse(readFileSync(0, "utf8"));
   } catch {
     process.exit(0);
   }
 
   const tool = payload?.tool_name;
-  if (!['Edit', 'Write', 'MultiEdit'].includes(tool)) process.exit(0);
+  if (!["Edit", "Write", "MultiEdit"].includes(tool)) process.exit(0);
 
   const filePath = payload?.tool_input?.file_path;
-  if (!filePath || !/\.(ts|tsx|js|jsx|mjs|cjs)$/.test(filePath)) process.exit(0);
+  if (!filePath || !/\.(ts|tsx|js|jsx|mjs|cjs)$/.test(filePath))
+    process.exit(0);
 
-  let stdout = '';
-  let stderr = '';
+  let stdout = "";
+  let stderr = "";
   try {
-    const out = execFileSync('pnpm', ['exec', 'eslint', filePath], { stdio: 'pipe' });
+    const out = execFileSync("pnpm", ["exec", "eslint", filePath], {
+      stdio: "pipe",
+    });
     stdout = out.toString();
   } catch (e) {
-    if (e.code === 'ENOENT') {
+    if (e.code === "ENOENT") {
       // pnpm/eslint 未安装，跳过
       process.exit(0);
     }
-    stdout = (e.stdout?.toString?.() || '').trim();
-    stderr = (e.stderr?.toString?.() || '').trim();
+    stdout = (e.stdout?.toString?.() || "").trim();
+    stderr = (e.stderr?.toString?.() || "").trim();
   }
 
-  const report = [stdout, stderr].filter(Boolean).join('\n');
+  const report = [stdout, stderr].filter(Boolean).join("\n");
   if (report) {
     process.stderr.write(`🔧 ESLint 发现问题（请修复后继续）：\n${report}\n`);
     process.exit(2);
