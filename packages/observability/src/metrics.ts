@@ -12,7 +12,11 @@ interface Bucket {
 
 const buckets = new Map<string, Bucket>();
 
-export function record(route: string, durationMs: number, errored = false): void {
+export function record(
+  route: string,
+  durationMs: number,
+  errored = false,
+): void {
   const b = buckets.get(route) ?? { count: 0, errors: 0, durations: [] };
   b.count += 1;
   if (errored) b.errors += 1;
@@ -22,15 +26,30 @@ export function record(route: string, durationMs: number, errored = false): void
 
 function percentile(sorted: number[], p: number): number {
   if (sorted.length === 0) return 0;
-  const idx = Math.min(sorted.length - 1, Math.floor((p / 100) * sorted.length));
-  return sorted[idx];
+  const idx = Math.min(
+    sorted.length - 1,
+    Math.floor((p / 100) * sorted.length),
+  );
+  return sorted[idx] ?? 0;
 }
 
-export function snapshot(): Record<string, { rate: number; errors: number; p50: number; p95: number; p99: number }> {
-  const out: Record<string, { rate: number; errors: number; p50: number; p95: number; p99: number }> = {};
+export function snapshot(): Record<
+  string,
+  { rate: number; errors: number; p50: number; p95: number; p99: number }
+> {
+  const out: Record<
+    string,
+    { rate: number; errors: number; p50: number; p95: number; p99: number }
+  > = {};
   for (const [route, b] of buckets) {
     const d = [...b.durations].sort((a, c) => a - c);
-    out[route] = { rate: b.count, errors: b.errors, p50: percentile(d, 50), p95: percentile(d, 95), p99: percentile(d, 99) };
+    out[route] = {
+      rate: b.count,
+      errors: b.errors,
+      p50: percentile(d, 50),
+      p95: percentile(d, 95),
+      p99: percentile(d, 99),
+    };
   }
   return out;
 }
@@ -42,11 +61,17 @@ export interface DepCheck {
 
 /** 框架无关的健康端点逻辑，交给具体 HTTP 框架包装成 GET /health、GET /ready */
 export function liveness() {
-  return { status: 'ok', timestamp: new Date().toISOString() };
+  return { status: "ok", timestamp: new Date().toISOString() };
 }
 
 export async function readiness(deps: DepCheck[]) {
-  const results = await Promise.all(deps.map(async (d) => ({ name: d.name, ok: await d.ok() })));
+  const results = await Promise.all(
+    deps.map(async (d) => ({ name: d.name, ok: await d.ok() })),
+  );
   const allOk = results.every((r) => r.ok);
-  return { status: allOk ? 'ok' : 'degraded', checks: results, timestamp: new Date().toISOString() };
+  return {
+    status: allOk ? "ok" : "degraded",
+    checks: results,
+    timestamp: new Date().toISOString(),
+  };
 }

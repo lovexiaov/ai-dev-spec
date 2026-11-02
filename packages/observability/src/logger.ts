@@ -6,6 +6,9 @@ import type {
   LogSink,
 } from "./types.js";
 
+/** 重新导出类型，便于调用方从 logger 直接取用（如 frontend 的 createBrowserLogger）。 */
+export type { LoggerOptions } from "./types.js";
+
 const LEVEL_WEIGHT: Record<LogLevelName, number> = {
   debug: 0,
   info: 1,
@@ -16,15 +19,17 @@ const LEVEL_WEIGHT: Record<LogLevelName, number> = {
 /** 深拷贝并就地脱敏：按点分路径把敏感字段替换成 [REDACTED] */
 function redact(value: unknown, paths: string[], prefix = ""): unknown {
   if (value === null || typeof value !== "object") return value;
-  const out: Record<string, unknown> = Array.isArray(value)
+  // 数组与对象分别复制，保持原结构；用 Record 视图统一做键遍历与写回。
+  const out: Record<string, unknown> | unknown[] = Array.isArray(value)
     ? [...(value as unknown[])]
     : { ...(value as Record<string, unknown>) };
-  for (const key of Object.keys(out)) {
+  const view = out as unknown as Record<string, unknown>;
+  for (const key of Object.keys(view)) {
     const full = prefix ? `${prefix}.${key}` : key;
     if (paths.includes(full)) {
-      out[key] = "[REDACTED]";
-    } else if (typeof out[key] === "object" && out[key] !== null) {
-      out[key] = redact(out[key], paths, full);
+      view[key] = "[REDACTED]";
+    } else if (typeof view[key] === "object" && view[key] !== null) {
+      view[key] = redact(view[key], paths, full);
     }
   }
   return out;
