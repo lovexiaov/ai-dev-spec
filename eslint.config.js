@@ -16,6 +16,9 @@ export default [
       "**/coverage/**",
       "**/*.config.js",
       "**/*.config.ts",
+      // 子模块是独立仓库，自带 eslint 配置，由根 lint 脚本经 pnpm -r lint 委派运行，
+      // 避免同一批文件被两套配置重复判定（也不会误用宿主规则去改别人的代码）。
+      "logging-framework/**",
     ],
   },
   {

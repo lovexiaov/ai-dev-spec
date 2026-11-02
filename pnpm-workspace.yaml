@@ -1,4 +1,7 @@
 packages:
   - "packages/*"
+  # Web 可观测底座已抽为独立仓库 agent-log-web，以 submodule 挂在下方路径；
+  # 仍需注册为 workspace 成员，宿主 pnpm -r 才能连带跑它的 lint/typecheck/test。
+  - "logging-framework/web/Observability"
 allowBuilds:
   esbuild: true

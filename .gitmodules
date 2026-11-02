@@ -1,3 +1,6 @@
 [submodule "logging-framework/macos/AgentLog"]
 	path = logging-framework/macos/AgentLog
 	url = https://github.com/lovexiaov/agent-log-macos.git
+[submodule "logging-framework/web/Observability"]
+	path = logging-framework/web/Observability
+	url = https://github.com/lovexiaov/agent-log-web.git

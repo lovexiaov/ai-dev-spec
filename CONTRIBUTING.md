@@ -20,12 +20,17 @@
 - 密钥、token、`.env` 永不进仓（详见 `AGENTS.md` 的 NEVER 规则）。
 - pre-commit 钩子会拦截 `.env` 与常见密钥模式；CI 也会做密钥扫描。
 
-## agent-log-macos 子模块
+## 可观测子模块（两个独立仓库）
 
-- `logging-framework/macos/AgentLog` 是 git submodule，指向 `agent-log-macos` 仓库（`https://github.com/lovexiaov/agent-log-macos.git`）。
-- 首次拉取：`git submodule update --init`。
-- 追新：`git submodule update --remote logging-framework/macos/AgentLog`，随后提交指针变更。
-- 业务项目请改用**纯 SPM 引用**该仓库，不要把它 fork 进本仓库。
+| 子模块路径                            | 仓库                                                                    | 内容                                                                                          |
+| ------------------------------------- | ----------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `logging-framework/web/Observability` | `agent-log-web`（`https://github.com/lovexiaov/agent-log-web.git`）     | Web 可观测包 `@scaffold/observability`：结构化日志（Schema v1）、trace、metrics、前端崩溃捕获 |
+| `logging-framework/macos/AgentLog`    | `agent-log-macos`（`https://github.com/lovexiaov/agent-log-macos.git`） | macOS 日志框架：swift-log + Pulse + KSCrash，自动埋点                                         |
+
+- 首次拉取：`git submodule update --init`（或 clone 时加 `--recurse-submodules`）。
+- 追新：`git submodule update --remote <path>`，随后提交指针变更。
+- Web 子模块注册在 `pnpm-workspace.yaml`，根 `pnpm -r typecheck|test` 会连带跑它的门禁；它自带 tsconfig/eslint，**不要在根配置里改它的规则**。
+- 业务项目请改用**包管理器 / SPM 引用**这些仓库，不要 fork 进本仓库。
 
 ## 规范优先于代码
 

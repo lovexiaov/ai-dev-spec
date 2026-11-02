@@ -1,6 +1,6 @@
 # 面向 Agent 的统一日志框架 · 通用接入规范（语言无关）
 
-> **状态（2026-11-02）**：**Schema v1 已冻结**，Web（`packages/observability`）与 macOS（子模块 `logging-framework/macos/AgentLog`）两端实现已对齐并通过测试。
+> **状态（2026-11-02）**：**Schema v1 已冻结**，两端实现均已抽为独立仓库、以 submodule 挂入并通过测试：Web `logging-framework/web/Observability`（[`agent-log-web`](https://github.com/lovexiaov/agent-log-web)）、macOS `logging-framework/macos/AgentLog`（`agent-log-macos`）。
 > 平台专属实现与完整设计以子模块 `logging-framework/macos/AgentLog/Docs/macos-agent-logging-design.md` 为**真源**。
 > 本文件只沉淀**通用、语言无关**的约束，供所有端（Web / macOS / 服务端 / 其他）共同遵守。
 
@@ -74,7 +74,8 @@
 ## 5. 平台专属实现归属（真源在外仓）
 
 - **macOS（原生 AppKit）**：完整设计与可运行代码见子模块 `logging-framework/macos/AgentLog`（真源文档 `Docs/macos-agent-logging-design.md`）。
-- **Web / 服务端**：复用 `packages/observability`，`LogEvent` 即线格式（§3）。
+- **Web / 服务端**：完整实现见子模块 `logging-framework/web/Observability`（包名 `@scaffold/observability`），`LogEvent` 即线格式（§3）。
+- **本目录只放语言无关的规范与机器可校验 schema**，不含任何平台实现——实现改动进各自仓库，规范改动才进这里。
 - **其他端**：遵循 §2 通用约束与 §3 Schema，平台细节自维护，不在本脚手架重复。
 
 ## 6. 与 ai-dev-spec 的一致性

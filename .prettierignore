@@ -1,0 +1,6 @@
+# 子模块与外部产物不参与宿主格式化（各自仓库有独立 format 脚本）
+logging-framework/
+node_modules/
+dist/
+coverage/
+pnpm-lock.yaml

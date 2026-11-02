@@ -50,7 +50,7 @@
 
 1. **规范先于代码**：`docs/` 下的 `constitution → spec → plan → tasks` 是一条人工闸门链，对应要点 1 与要点 3 的「人决策」节点。
 2. **约束写进治理文件，强制写进三层机器门禁**：`AGENTS.md` 给 Agent 看（软约束），真正拦人的是三层**硬门禁**——① `Git Hooks`（husky：pre-commit / commit-msg / pre-push，对 Ded 任何 AI 工具都生效）② `Agent Hooks`（`.claude/settings.json`：tool-use 前/后置拦截）③ `.github/workflows/ci.yml`（远端 PR 闸门）。软硬必须一致，避免「文档写得好、AI 不遵守」的空转。
-3. **可观测性即一等公民**：可观测性不是一个「以后再加」的模块，而是脚手架自带的 `packages/observability` 核心包，前端 / 后端开箱即用，对应要点 2。
+3. **可观测性即一等公民**：可观测性不是一个「以后再加」的模块，而是独立仓库维护、以 submodule 挂入的 `logging-framework/web/Observability`（`agent-log-web`）核心包，前端 / 后端开箱即用，对应要点 2。
 4. **验收条件即测试**：`spec.md` 的验收清单与 `tests/` 一一对应，Agent 跑不过测试就不算完成。
 5. **状态外置、进度可交接**：任务进度、决策、验证证据必须写入仓库（`handoff.md` / `tasks.md` / Git 提交），而非对话历史；任何新 Agent 读文件即可恢复上下文继续干活，对应要点 4。
 
@@ -200,7 +200,7 @@ ai-dev-spec/                         # 脚手架根（= 你的项目根）
 
 ---
 
-## 五、核心模块设计：`packages/observability`（要点 2 落地）
+## 五、核心模块设计：Web 可观测包 `@scaffold/observability`（要点 2 落地）
 
 设计目标：让前端 / 后端在 AI 主导开发下「看得见、追得清、可回放」。
 
@@ -229,15 +229,15 @@ ai-dev-spec/                         # 脚手架根（= 你的项目根）
 | 关键注意点                   | 脚手架落点                                                     | 对应文件 / 模块                                                                                                                                                                                                   |
 | ---------------------------- | -------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 1. 人=需求提供者+决策者      | 规范先于代码 + 人工闸门                                        | `docs/specs/_template/{spec,plan,tasks}.md`、`AGENTS.md` 的 Human Gates、`constitution.md`                                                                                                                        |
-| 2. 日志 / 可观测（尤其前端） | 自带可观测核心包                                               | `packages/observability/`、`config/logging.config.ts`、CI 中的构建/类型门禁                                                                                                                                       |
+| 2. 日志 / 可观测（尤其前端） | 自带可观测核心包                                               | `logging-framework/web/Observability/`（submodule）、`config/logging.config.ts`、CI 中的构建/类型门禁                                                                                                             |
 | 3. 约束 AI + 明确验收        | 软约束(治理文件)+**三层硬门禁**(Git/Agent Hooks + CI)+可测验收 | `AGENTS.md`(三层边界)、`eslint.config.js`/`commitlint.config.js`(规则落地)、`.husky/`(Git Hooks)、`.claude/settings.json`+`scripts/hooks/`(Agent Hooks)、`.github/workflows/ci.yml`、`tests/`、`spec.md` 验收清单 |
-| 4. 进度可观测/可跟踪/可换人  | 状态外置+交接文档+Git检查点+Clock例程+进度日志                 | `docs/specs/<feature>/handoff.md`、`tasks.md`(状态/证据)、`AGENTS.md`(Clock-in/out)、`packages/observability` 的 `agent-events.ts`、Git 提交信息                                                                  |
+| 4. 进度可观测/可跟踪/可换人  | 状态外置+交接文档+Git检查点+Clock例程+进度日志                 | `docs/specs/<feature>/handoff.md`、`tasks.md`(状态/证据)、`AGENTS.md`(Clock-in/out)、`logging-framework/web/Observability` 的 `agent-events.ts`、Git 提交信息                                                     |
 
 ---
 
 ## 七、落地建议
 
-1. **以本仓库为模板**：新项目 `git clone` 后删掉 `docs/specs/_template` 之外的内容，保留模板与 `packages/observability`。
+1. **以本仓库为模板**：新项目 `git clone --recurse-submodules` 后删掉 `docs/specs/_template` 之外的内容，保留模板与 `logging-framework/` 下的可观测子模块。
 2. **先写 constitution，再写第一个 spec**：强制走 `spec → plan(人批) → tasks → 实现` 四步。
 3. **AGENTS.md 当「伤疤」写**：每次 Agent 犯错的纠正，沉淀成一条规则；超过 200 行就下沉到 `docs/` 或 `.agents/`（getlockstep.dev 的维护哲学）。
 4. **可观测先接入再写功能**：项目第一天就把 `observability` 接上 Sentry/stdout，避免「上线才崩、查无日志」。
