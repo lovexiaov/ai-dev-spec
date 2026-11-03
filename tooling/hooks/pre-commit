@@ -1,14 +1,23 @@
 #!/usr/bin/env sh
 # 中立 pre-commit 模板（由 init.mjs / add-to-existing.mjs 复制到目标仓库的钩子目录）。
 # 对应 AGENTS.md NEVER「提交密钥/.env」与「禁止 console.log 做生产日志」。
-set -e
+# 与具体语言解耦：只要项目含 tooling/gate-runner.mjs，lint 就由它编排。
 
-echo "🔍 扫描密钥文件 ..."
 staged=$(git diff --cached --name-only --diff-filter=ACM)
-printf '%s\n' "$staged" | grep -E '(^|/)\.env$|secrets?\.json$|id_rsa|\.pem$' | grep -v '\.env\.example$' && {
+
+echo "🔍 [pre-commit] 扫描密钥文件 ..."
+if printf '%s\n' "$staged" | grep -E '(^|/)\.env$|(^|/)\.env\.[^e][^x]|secrets?\.json$|id_rsa|\.pem$' | grep -v '\.env\.example$'; then
   echo "❌ 拒绝提交疑似密钥/凭据文件（.env / secrets.json / id_rsa / .pem）。请改用环境变量或密钥管理。"
   exit 1
-}
+fi
 
-echo "🧹 运行 lint 门禁（gate-runner）..."
-node tooling/gate-runner.mjs --stages lint
+echo "🔍 [pre-commit] 扫描密钥内容 ..."
+if git diff --cached -U0 | grep -Ei '^(+| )' | grep -Ei '(AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{36}|xox[baprs]-[A-Za-z0-9-]+|sk-[A-Za-z0-9]{32,}|-----BEGIN [A-Z ]*PRIVATE KEY-----|AIza[0-9A-Za-z_-]{35})'; then
+  echo "❌ 检测到疑似密钥内容泄露，提交被拒绝。请移除凭据后重试。"
+  exit 1
+fi
+
+if [ -f tooling/gate-runner.mjs ]; then
+  echo "🧹 [pre-commit] lint 门禁（gate-runner）..."
+  node tooling/gate-runner.mjs --stages lint || exit 1
+fi

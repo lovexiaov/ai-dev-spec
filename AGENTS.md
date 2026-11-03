@@ -19,6 +19,9 @@
 - 类型检查：`pnpm typecheck`
 - Lint & 格式：`pnpm lint`
 - **每次提交前必须跑通 `pnpm lint && pnpm typecheck && pnpm test`**。
+- **用本脚手架生成新项目**：`node tooling/init.mjs <lang> <dir>`（`lang` = typescript/swift/python）。
+- **为已有项目追加约束+日志**：`node tooling/add-to-existing.mjs <lang> <dir>`（不碰业务代码）。
+- 门禁编排器 `tooling/gate-runner.mjs` 是语言中立的，新增语言只需加 `tooling/adapters/<lang>.mjs`。
 
 ## 3. 三层边界（Three-tier Boundaries）
 

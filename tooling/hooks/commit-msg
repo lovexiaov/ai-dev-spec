@@ -1,0 +1,10 @@
+#!/usr/bin/env sh
+# 中立 commit-msg 模板：仅在 commitlint 可用时强制 Conventional Commits，
+# 否则放行（避免在没有 Node 工具链的 Swift/Python 项目里硬失败）。
+if [ -f node_modules/.bin/commitlint ]; then
+  pnpm exec commitlint --edit "$1"
+elif command -v commitlint >/dev/null 2>&1; then
+  commitlint --edit "$1"
+else
+  echo "⚠️  commitlint 未安装，跳过 Conventional Commits 校验。"
+fi
