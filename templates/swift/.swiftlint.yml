@@ -1,0 +1,9 @@
+only_rules: []
+included:
+  - Sources
+  - Tests
+opt_in_rules:
+  - empty_count
+  - closure_spacing
+warning_threshold: 50
+line_length: 120
