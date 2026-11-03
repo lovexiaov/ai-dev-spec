@@ -27,20 +27,12 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
 
-      - name: Lint
-        run: pnpm lint
-
-      - name: Typecheck
-        run: pnpm typecheck
-
-      - name: Unit / Acceptance tests
-        run: pnpm test
-        # --bail 已写进根脚本（pnpm -r --bail test）；此处再传 `-- --bail`
-        # 会被透传成 vitest 的位置参数，bail 语义失效。
-        # 必须覆盖 docs/specs/<feature>/spec.md 的验收条件
-
-      - name: Build
-        run: pnpm build
+      - name: Gates (neutral gate-runner)
+        run: node tooling/gate-runner.mjs
+        # 中立编排：发现 .toolchain.json → 按适配器跑 lint/typecheck/test/build。
+        # 根仓库 .toolchain.json 声明 typescript 适配器，等价于原 eslint/tsc/vitest 流程；
+        # 新增语言只需加一个 tooling/adapters/<lang>.mjs，CI 与根仓库零改动。
+        # 必须覆盖 docs/specs/<feature>/spec.md 的验收条件。
 
   security:
     runs-on: ubuntu-latest

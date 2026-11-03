@@ -1,0 +1,9 @@
+{
+  "adapter": "typescript",
+  "stages": {
+    "lint": "pnpm lint",
+    "typecheck": "pnpm typecheck",
+    "test": "pnpm test",
+    "build": "pnpm build"
+  }
+}

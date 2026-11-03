@@ -8,11 +8,12 @@
     "node": ">=20"
   },
   "scripts": {
-    "dev": "pnpm -r --parallel dev",
+    "dev": "pnpm -r --parallel --if-present dev",
     "build": "pnpm -r build",
     "test": "pnpm -r --bail test",
     "typecheck": "pnpm -r typecheck",
     "lint": "eslint . && pnpm -r lint",
+    "gate": "node tooling/gate-runner.mjs",
     "format": "prettier -w .",
     "prepare": "husky"
   },

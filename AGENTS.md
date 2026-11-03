@@ -7,14 +7,15 @@
 ## 1. 项目概述
 
 - 这是一个采用 **AI 主导开发（Spec-Driven Development）** 的项目：人负责需求与决策，Agent 负责实现。
-- 技术栈：TypeScript + Node.js（后端）/ React + Vite（前端），包管理用 pnpm。
-- 业务代码在 `src/`，特性规范在 `docs/specs/<feature>/`。可观测核心包是**独立仓库**的子模块：Web 端 `logging-framework/web/Observability`（`agent-log-web`），macOS 端 `logging-framework/macos/AgentLog`（`agent-log-macos`）。
+- **架构是语言中立的（language-agnostic）**：根仓库只持有「中立契约」——`docs/constitution.md`、`docs/spec-format.md`、`docs/gate-contract.md`、`docs/logging-framework/INTERFACE.md` 与 `schema/log-event.schema.json`；具体语言工具由 `tooling/adapters/*` 适配。脚手架自身用 TypeScript 实现（gate-runner 是 Node 脚本），但它强制的**契约与产出物无关任何语言**（详见 `DESIGN.md` 顶部「语言中立架构」）。
+- 当前根仓库的「实现语言」是 TypeScript + Node.js（pnpm）；Web 端日志实现在 `logging-framework/web/Observability`（`agent-log-web`，npm `@scaffold/observability`），macOS 端在 `logging-framework/macos/AgentLog`（`agent-log-macos`），二者都是中立 `docs/logging-framework/INTERFACE.md` 的实现。
+- 业务代码在 `src/`，特性规范在 `docs/specs/<feature>/`。
 
 ## 2. 必跑命令（Agent 自己发现不了的）
 
-- 安装依赖：`pnpm install`
-- 启动开发：`pnpm dev`
-- 快速测试：`pnpm test -- --bail`
+- 安装依赖：`pnpm install`（克隆时必须 `--recurse-submodules`，否则 Web 子模块缺失导致 install 失败）
+- 启动开发：`pnpm dev`（模板尚无业务代码时为空操作；加入带 `dev` 脚本的包后自动并行拉起）
+- 快速测试：`pnpm test`（已内置 `--bail`：任一 workspace 包测试失败即终止）
 - 类型检查：`pnpm typecheck`
 - Lint & 格式：`pnpm lint`
 - **每次提交前必须跑通 `pnpm lint && pnpm typecheck && pnpm test`**。
@@ -59,7 +60,7 @@
 
 - TypeScript `strict: true`；函数 ≤ 50 行，文件 ≤ 300 行。
 - 提交遵循 Conventional Commits：`feat:` / `fix:` / `refactor:` / `test:` / `docs:`。
-- 日志走 `@scaffold/observability`（submodule `logging-framework/web/Observability`），禁止 `console.log` 作为生产日志手段。
+- 日志遵循 `docs/logging-framework/INTERFACE.md` 统一接口；Web 实现为 `@scaffold/observability`（`logging-framework/web/Observability`），禁止 `console.log` 作为生产日志手段。
 - 前端错误务必经 ErrorBoundary 上报，绝不吞掉异常。
 
 ## 7. 进度可交接（Clock-in / Clock-out）— 要点 4
@@ -74,9 +75,9 @@
 
 > 上面的规则若只靠自觉，AI 完全可以「假装读过、不遵守」。本仓库用三层**硬门禁**把约束变成机器强制：
 
-1. **Git Hooks（husky，对 Ded 任何工具都生效）**：`pre-commit` 拦截 `.env`/密钥 + 跑 ESLint（含 `@typescript-eslint/no-console` 硬错误）；`commit-msg` 强制 Conventional Commits；`pre-push` 跑通 `typecheck`+`test`。
+1. **Git Hooks（husky，对 Ded 任何工具都生效）**：`pre-commit` 拦截 `.env`/密钥 + 跑 ESLint（含 `no-console` 硬错误）；`commit-msg` 强制 Conventional Commits；`pre-push` 跑通 `typecheck`+`test`。
 2. **Agent Hooks（Claude Code：`.claude/settings.json` + `scripts/hooks/*.mjs`）**：改 `src/` 前必须存在已批准 `plan.md`（`check-plan.mjs` 直接 `exit 2` 阻断）；拦截高危 Bash 命令（`guard-bash.mjs`）；改完即跑 ESLint 自纠（`lint-touched.mjs`）。
-3. **CI（远端）**：PR 触发 lint/typecheck/test/安全扫描/构建，失败即阻断合并。
+3. **CI（远端）**：两个 job——`quality`（经中立 `tooling/gate-runner.mjs` 跑 lint/typecheck/test/构建）+ `security`（gitleaks 密钥扫描 + `pnpm audit --prod`），任一失败即阻断合并。门禁的实际执行由 `gate-runner` 统一驱动（发现 `.toolchain.json` → 按适配器跑各阶段），详见 `docs/gate-contract.md`。
 
 - 紧急绕过（需人工知晓并事后补规则）：`SKIP_PLAN_CHECK=1` / `SKIP_BASH_GUARD=1`；绕过会被记入日志，不可滥用。
 - 详见 `DESIGN.md` §7「强制约束层」与各 Hook 脚本注释。

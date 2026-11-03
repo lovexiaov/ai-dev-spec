@@ -1,0 +1,7 @@
+#!/usr/bin/env sh
+# 中立 pre-push 模板（由 init.mjs / add-to-existing.mjs 复制）。
+# 对应 AGENTS.md §2「提交前必须跑通」与 constitution §4「测试即验收」。
+set -e
+
+echo "🚀 运行门禁（typecheck + test，gate-runner）..."
+node tooling/gate-runner.mjs --stages typecheck,test

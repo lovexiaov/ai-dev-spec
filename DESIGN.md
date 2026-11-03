@@ -2,6 +2,8 @@
 
 > 目标：在「人退居需求与决策者、AI Agent 主导编码」的新范式下，用一套可复用的项目初始化脚手架，把四条关键注意点**固化进目录结构、配置文件与核心模块**，让新项目从第一行代码起就自带约束、可观测、验收与进度可交接机制。
 
+> **本脚手架是语言中立（language-agnostic）的**：根仓库只承载「中立契约」（`docs/constitution.md`、`docs/spec-format.md`、`docs/gate-contract.md`、`docs/logging-framework/INTERFACE.md`、`schema/log-event.schema.json`），具体语言工具由 `tooling/adapters/*` 适配；日志线格式由同一份 JSON Schema 约束，与实现语言无关。脚手架自身用 TypeScript 书写只是其「实现语言」，不影响它产出/约束任意语言的项目。
+
 ---
 
 ## 一、网络调研结论（四要点最佳实践）
@@ -39,7 +41,7 @@
 - **核心原则：状态外置到仓库，而非对话历史**：跨会话 / 跨 Agent 接力的本质是「外部状态接力」，不是「会话接力」。把关键决策只留在聊天历史里，换 Agent 后必然丢上下文；把任务状态放进仓库、Git、测试与结构化交接文档，新 Agent 才能在不同终端 / IDE / 机器间无缝续作（aistacknav.com《Claude Code+Codex 跨平台任务接力》）。
 - **HANDOFF / PROGRESS 文档即连续性凭证**：每个特性维护一份 `handoff.md`，记录目标、当前状态、已完成且已验证的工作、阻塞项、下一步、改动文件、已跑命令与结果、关键决策（docs-md.com、strangelove-ai.com、walkinglabs.github.io）。新 Agent 启动时第一件事就是读它——把「重建上下文」成本从 15 分钟压到 3 分钟。
 - **Git 提交即检查点**：每次完成原子工作就提交，commit message 写成结构化交接笔记（实现了什么 / 哪些测试通过 / 下一个待办）；`git log` 成为人机可读的进度审计链（agentpatterns.ai、walkinglabs）。
-- **Clock-in / Clock-out 例程写进 AGENTS.md**：上班先读 `handoff.md / decisions / git log`；下班前更新 `handoff.md`、跑通校验、提交 `state checkpoint`（strangelove-ai.com）。动态任务状态**绝不**塞进 AGENTS.md——那会污染长期规则文件。
+- **Clock-in / Clock-out 例程写进 AGENTS.md**：上班先读 `handoff.md / decisions / git log`；下班前更新 `handoff.md`、跑通校验、提交 `state checkpoint`（strangelove-ai.com）。
 - **任务列表带机器可读状态**：`tasks.md` 每项带 `todo / in_progress / blocked / done` 状态与「验证证据」（Verified / Proxy / Not run），交接报告可据此自动生成（zylos.ai、minimal-harness AGENTS.md）。未完成测试前，`passes` 不得翻为 true。
 - **进度也要进日志（可观测）**：用 `agent_step` / `agent_handoff` / `agent_decision` 等事件把「Agent 在做什么、做到哪了、为什么换人」写进同一套结构化日志，使进度不仅有人读的文件、也有机查的流（呼应要点 2 的可观测底座）。
 - **Worktree 隔离并发**：多 Agent 并行时，每个任务在独立 git worktree 开发，主仓库保持干净，互不污染（jxxy.net《Agent 工程师是怎么用 AI 写代码的》）。
@@ -66,12 +68,13 @@ ai-dev-spec/                         # 脚手架根（= 你的项目根）
 ├── .cursor/rules/project.mdc       # Cursor 系兼容：指向 AGENTS.md
 │
 ├── package.json                    # 根工程：pnpm workspace + scripts(dev/build/test/typecheck/lint/format/prepare)
-├── pnpm-workspace.yaml             # 工作区声明（packages/*）
+├── pnpm-workspace.yaml             # 工作区声明（含 logging-framework/web/Observability 子模块作为成员）
 ├── tsconfig.base.json             # 共享 TS 严格配置（strict/noUncheckedIndexedAccess…）
-├── eslint.config.js               # 【强制】ESLint 扁平配置，含 @typescript-eslint/no-console 等硬错误
+├── eslint.config.js               # 【强制】ESLint 扁平配置，含 no-console 等硬错误
 ├── commitlint.config.js            # 【强制】commit message 规范（Conventional Commits）
 ├── .lintstagedrc.json             # lint-staged 配置（pre-commit 触发）
 ├── .npmrc / .gitignore            # pnpm 配置 / 忽略 .env 等
+├── .gitmodules                    # 两个 submodule：agent-log-web、agent-log-macos
 │
 ├── .husky/                        # 【强制·Git Hooks】本地第一道硬门，覆盖任何 AI 工具
 │   ├── pre-commit                 # 密钥/.env 拦截 + secret 扫描 + lint-staged（eslint 强制）
@@ -87,6 +90,9 @@ ai-dev-spec/                         # 脚手架根（= 你的项目根）
 │
 ├── docs/                           # 【要点1】规范先于代码
 │   ├── constitution.md             # 项目级「宪法」：原则、技术栈、不可违反的硬约束
+│   ├── logging-framework/          # 语言无关的日志接入规范（Schema v1 真源）+ 机器可校验 schema
+│   │   ├── README.md               # 通用约束与映射表
+│   │   └── schema/{log-event.schema.json,example.json}
 │   ├── specs/                      # 每个特性一个目录，spec 随代码版本化
 │   │   └── _template/              # 复制此目录开始一个新特性
 │   │       ├── spec.md            # 目标/非目标/约束/接口/【可测验收条件】/完成定义
@@ -95,20 +101,21 @@ ai-dev-spec/                         # 脚手架根（= 你的项目根）
 │   │       └── handoff.md         # 【要点4】交接文档：进度/阻塞/下一步/已跑命令结果
 │   └── decisions/                 # ADR 式决策记录（为什么这么做）
 │
-├── packages/
-│   └── observability/              # 【要点2】核心模块：结构化日志/追踪/前端可观测
-│       ├── package.json
-│       ├── README.md
-│       ├── tsconfig.json
-│       └── src/
-│           ├── types.ts            # 日志级别与统一字段类型
-│           ├── logger.ts          # 结构化 JSON 日志 + 脱敏 + traceId 绑定
-│           ├── trace.ts           # traceId/requestId 生成与跨调用传播（W3C traceparent）
-│           ├── metrics.ts         # RED 指标 + /health、/ready 辅助
-│           ├── agent-events.ts     # 【要点4】agent_step/handoff/decision 进度事件（进度可观测）
-│           └── frontend/
-│               ├── index.tsx      # React ErrorBoundary + 浏览器结构化上报 + AI 事件日志
-│               └── ai-events.ts   # ai_request/tool_call/response/guardrail/error 事件
+├── logging-framework/              # 【要点2】可观测核心包：两个独立仓库，以 git submodule 挂入
+│   ├── web/Observability/          # submodule → agent-log-web（npm 包名 @scaffold/observability）
+│   │   ├── src/logger.ts           # 结构化 JSON 日志 + 脱敏 + traceId（LogEvent 即 Schema v1 线格式）
+│   │   ├── src/trace.ts            # traceId 生成与跨调用传播（W3C traceparent）
+│   │   ├── src/metrics.ts          # RED 指标 + /health、/ready 辅助
+│   │   ├── src/agent-events.ts     # 【要点4】agent_step/handoff/decision 进度事件
+│   │   ├── src/frontend/           # ErrorBoundary + 浏览器结构化上报 + ai-events
+│   │   ├── src/logger.test.ts      # Schema v1 形状守卫（6 用例）
+│   │   ├── package.json / eslint.config.js / tsconfig*.json / pnpm-*.yaml / README.md
+│   │   └── （独立仓库维护，@scaffold/observability 接入方 import 路径不变）
+│   └── macos/AgentLog/             # submodule → agent-log-macos（Swift + SPM）
+│       ├── Package.swift           # swift-log + Pulse + KSCrash，自动埋点（UI/网络/崩溃/卡顿）
+│       ├── Sources/AgentLog/*.swift
+│       ├── Tests/AgentLogTests/*.swift   # 埋点触发 + Schema v1 断言
+│       └── Docs/macos-agent-logging-design.md  # macOS 端设计真源
 │
 ├── config/
 │   └── logging.config.ts          # 日志级别、脱敏字段、sink（stdout/Sentry）配置
@@ -118,7 +125,7 @@ ai-dev-spec/                         # 脚手架根（= 你的项目根）
 │
 └── .github/
     └── workflows/
-        └── ci.yml                 # 【要点3】远端硬性闸门：lint/typecheck/test/安全扫描/构建
+        └── ci.yml                 # 【要点3】远端硬性闸门：quality(lint/typecheck/test/构建) + security(gitleaks + audit)
 ```
 
 ---
@@ -150,7 +157,7 @@ ai-dev-spec/                         # 脚手架根（= 你的项目根）
 
 ### 5. `.github/workflows/ci.yml`（硬性闸门）— 要点 3
 
-- PR 触发：`lint → typecheck → 单元测试（含 spec 验收测试）→ 安全扫描（secret/依赖审计）→ 构建`。
+- PR 触发两个 job：`quality`（lint → typecheck → 单元测试（含 spec 验收测试）→ 构建）、`security`（gitleaks 密钥扫描 + `pnpm audit --prod`）。
 - 任一失败即阻断合并，等价于把「人工 review 难」转成「机器先守门」。
 
 ### 6. `docs/specs/<feature>/handoff.md`（交接文档）— 要点 4
@@ -182,9 +189,9 @@ ai-dev-spec/                         # 脚手架根（= 你的项目根）
 
 **③ 根工程配置让约束「可执行」**
 
-- `package.json` 提供 `lint/typecheck/test` 脚本载体（此前缺失，导致 CI 里的 `pnpm lint` 是空壳）。
-- `eslint.config.js` 把「禁止 console.log 做生产日志」落成 `@typescript-eslint/no-console: error`（仅放行 `warn/error` 兜底），`commitlint.config.js` 落 commit 规范，`tsconfig.base.json` 兜底 TS 严格。
-- 前端 `frontend/index.tsx` 唯一的 `console.log` 是浏览器无端点时的最后兜底，已用 `eslint-disable` 显式标注。
+- `package.json` 提供 `lint/typecheck/test` 脚本载体（此前缺失，导致 CI 里的 `pnpm lint` 是空壳；`test` 现已内置 `--bail`）。
+- `eslint.config.js` 把「禁止 console.log 做生产日志」落成 `no-console: error`（仅放行 `warn/error` 兜底），`commitlint.config.js` 落 commit 规范，`tsconfig.base.json` 兜底 TS 严格。
+- 前端可观测代码（含 `ErrorBoundary`、浏览器 logger、`ai-events`）现位于 submodule `logging-framework/web/Observability/src/frontend/`，其中唯一的 `console.log` 是浏览器无端点时的最后兜底，已用 `eslint-disable` 显式标注。
 
 **强制力对照（与原方案相比）**
 
@@ -241,7 +248,7 @@ ai-dev-spec/                         # 脚手架根（= 你的项目根）
 2. **先写 constitution，再写第一个 spec**：强制走 `spec → plan(人批) → tasks → 实现` 四步。
 3. **AGENTS.md 当「伤疤」写**：每次 Agent 犯错的纠正，沉淀成一条规则；超过 200 行就下沉到 `docs/` 或 `.agents/`（getlockstep.dev 的维护哲学）。
 4. **可观测先接入再写功能**：项目第一天就把 `observability` 接上 Sentry/stdout，避免「上线才崩、查无日志」。
-   4.5. **强制约束靠 Hooks 生效**：`git init` 后执行 `pnpm install`，husky 自动激活三道 Git Hooks；使用 Claude Code 会自动加载 `.claude/settings.json` 的 Agent Hooks。此后「禁 console.log / 必须 plan 批准才改 src / 高危命令拦截」都是机器守门，AI 绕不过。
+   4.5. **强制约束靠 Hooks 生效**：`git clone --recurse-submodules` 后执行 `corepack enable && pnpm install`，husky 自动激活三道 Git Hooks；使用 Claude Code 会自动加载 `.claude/settings.json` 的 Agent Hooks。此后「禁 console.log / 必须 plan 批准才改 src / 高危命令拦截」都是机器守门，AI 绕不过。
 5. **小 PR + 机器守门**：把 review 负担从「人肉眼 Diff」转移到「CI 强制 + reviewer 子 Agent 二审」，人只管「意图与边界」。
 6. **每次收工即交接**：强制 Clock-out——更新 `handoff.md` + 提交 checkpoint。这样随时能换一个新 Agent（或换工具 / 换机器）接手，上下文零丢失；并行任务用 git worktree 隔离。
 
