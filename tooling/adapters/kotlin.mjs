@@ -10,6 +10,7 @@ export default {
     test: "./gradlew test",
     // 完整构建（含 jar 产出）；非 Android 模块无需 SDK。
     build: "./gradlew build",
-    // Kotlin 无内置 linter；接入 ktlint/detekt 后在此补 lint 阶段，避免破坏契约。
+    // 静态检查：ktlint（已在各模块 build.gradle.kts 接入）。契约层代码风格一致性保障。
+    lint: "./gradlew ktlintCheck",
   },
 };
