@@ -4,3 +4,6 @@
 [submodule "logging-framework/web/Observability"]
 	path = logging-framework/web/Observability
 	url = https://github.com/lovexiaov/agent-log-web.git
+[submodule "logging-framework/android/AgentLog"]
+	path = logging-framework/android/AgentLog
+	url = https://github.com/lovexiaov/agent-log-android.git

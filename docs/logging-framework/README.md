@@ -75,7 +75,7 @@
 
 - **macOS（原生 AppKit）**：完整设计与可运行代码见子模块 `logging-framework/macos/AgentLog`（真源文档 `Docs/macos-agent-logging-design.md`）。
 - **Web / 服务端**：完整实现见子模块 `logging-framework/web/Observability`（包名 `@scaffold/observability`），`LogEvent` 即线格式（§3）。
-- **本目录只放语言无关的规范与机器可校验 schema**，不含任何平台实现——实现改动进各自仓库，规范改动才进这里。
+- **Android（Kotlin）**：实现已抽为独立仓库并以 submodule 挂入 `logging-framework/android/AgentLog`，真源仓库 [`agent-log-android`](https://github.com/lovexiaov/agent-log-android)（含 `agentlog-core` 纯 JVM 核心 + `agentlog-android` AGP 胶水库，详见该仓库 `README.md`）。与 macos/web 完全对齐：线格式与 §3 Schema 逐字相同；门禁契约由 `ai-dev-spec` 的 `tooling/adapters/kotlin.mjs` 适配器 + 核心模块内 `.toolchain.json` 驱动。独立仓库内可经 Gradle wrapper 单独编译、跑 `SchemaTests` 门禁。
 - **其他端**：遵循 §2 通用约束与 §3 Schema，平台细节自维护，不在本脚手架重复。
 
 ## 6. 与 ai-dev-spec 的一致性
