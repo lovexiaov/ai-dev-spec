@@ -1,6 +1,6 @@
 # 面向 Agent 的统一日志框架 · 通用接入规范（语言无关）
 
-> **状态（2026-11-02）**：**Schema v1 已冻结**，两端实现均已抽为独立仓库、以 submodule 挂入并通过测试：Web `logging-framework/web/Observability`（[`agent-log-web`](https://github.com/lovexiaov/agent-log-web)）、macOS `logging-framework/macos/AgentLog`（`agent-log-macos`）。
+> **状态（2026-11-07）**：**Schema v1 已冻结**，各端实现均已抽为独立仓库、以 submodule 挂入并通过测试：Web `logging-framework/web/Observability`（[`agent-log-web`](https://github.com/lovexiaov/agent-log-web)）、macOS `logging-framework/macos/AgentLog`（`agent-log-macos`）、Android `logging-framework/android/AgentLog`（[`agent-log-android`](https://github.com/lovexiaov/agent-log-android)）、Java `logging-framework/java/AgentLog`（[`agent-log-java`](https://github.com/lovexiaov/agent-log-java)）、Go `logging-framework/go/AgentLog`（[`agent-log-go`](https://github.com/lovexiaov/agent-log-go)）、Python `logging-framework/python/AgentLog`（[`agent-log-python`](https://github.com/lovexiaov/agent-log-python)）。
 > 平台专属实现与完整设计以子模块 `logging-framework/macos/AgentLog/Docs/macos-agent-logging-design.md` 为**真源**。
 > 本文件只沉淀**通用、语言无关**的约束，供所有端（Web / macOS / 服务端 / 其他）共同遵守。
 
@@ -65,6 +65,8 @@
 | 自动埋点 | `agent_auto`         | `extra.agentAuto`    | `agentAuto`          |
 | 上下文   | `payload`            | 其余 `extra` 键      | `payload`            |
 
+> Java / Go / Python 端同样沿用「内部 camelCase → 序列化边界 snake_case」的映射，线格式与其他端逐字一致（字段名、6 档 level、封闭顶层）。
+
 ## 4. 已确认假设（通用部分）
 
 - 汇聚方式：本地持久化 + 易导出，纯本地、无云端依赖（轻量优先）。
@@ -76,6 +78,9 @@
 - **macOS（原生 AppKit）**：完整设计与可运行代码见子模块 `logging-framework/macos/AgentLog`（真源文档 `Docs/macos-agent-logging-design.md`）。
 - **Web / 服务端**：完整实现见子模块 `logging-framework/web/Observability`（包名 `@scaffold/observability`），`LogEvent` 即线格式（§3）。
 - **Android（Kotlin）**：实现已抽为独立仓库并以 submodule 挂入 `logging-framework/android/AgentLog`，真源仓库 [`agent-log-android`](https://github.com/lovexiaov/agent-log-android)（含 `agentlog-core` 纯 JVM 核心 + `agentlog-android` AGP 胶水库，详见该仓库 `README.md`）。与 macos/web 完全对齐：线格式与 §3 Schema 逐字相同；门禁契约由 `ai-dev-spec` 的 `tooling/adapters/kotlin.mjs` 适配器 + 核心模块内 `.toolchain.json` 驱动。独立仓库内可经 Gradle wrapper 单独编译、跑 `SchemaTests` 门禁。
+- **Java（JVM 服务端 / 库）**：实现见子模块 `logging-framework/java/AgentLog`，真源仓库 [`agent-log-java`](https://github.com/lovexiaov/agent-log-java)。Maven 工程、**零运行时依赖**（手写 JSON 序列化/解析，不用 Jackson/Gson），JDK 17；`mvn test` 跑 `SchemaTests`（C7 字段集断言）门禁，`checkstyle` 为风格门禁。
+- **Go（服务端）**：实现见子模块 `logging-framework/go/AgentLog`，真源仓库 [`agent-log-go`](https://github.com/lovexiaov/agent-log-go)。**仅标准库**（零第三方依赖），`go test ./...` 跑 `TestSchemaConformance`（C7）门禁；内置 `HTTPMiddleware`（network_request）与 `InstallPanicHandler`（crash）自动埋点；`gofmt` / `go vet` 为门禁。
+- **Python（服务端 / 脚本）**：实现见子模块 `logging-framework/python/AgentLog`，真源仓库 [`agent-log-python`](https://github.com/lovexiaov/agent-log-python)。**仅标准库**（`unittest`，不依赖 pytest / jsonschema），`python3 -m unittest discover -s tests` 跑 `SchemaTests`（C7）门禁；含 `install_crash_handler()` 自动埋点。
 - **其他端**：遵循 §2 通用约束与 §3 Schema，平台细节自维护，不在本脚手架重复。
 
 ## 6. 与 ai-dev-spec 的一致性

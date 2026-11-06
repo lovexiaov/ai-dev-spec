@@ -7,3 +7,12 @@
 [submodule "logging-framework/android/AgentLog"]
 	path = logging-framework/android/AgentLog
 	url = https://github.com/lovexiaov/agent-log-android.git
+[submodule "logging-framework/java/AgentLog"]
+	path = logging-framework/java/AgentLog
+	url = https://github.com/lovexiaov/agent-log-java.git
+[submodule "logging-framework/go/AgentLog"]
+	path = logging-framework/go/AgentLog
+	url = https://github.com/lovexiaov/agent-log-go.git
+[submodule "logging-framework/python/AgentLog"]
+	path = logging-framework/python/AgentLog
+	url = https://github.com/lovexiaov/agent-log-python.git
