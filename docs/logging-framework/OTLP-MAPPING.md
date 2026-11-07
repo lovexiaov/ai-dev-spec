@@ -1,7 +1,9 @@
 # agent-log → OpenTelemetry (OTLP) 映射规范
 
-> **状态（2026-11-07）**：D3「OTel 对齐」规范真源。首个实现已落地 Python 端
-> （`logging-framework/python/AgentLog/agentlog/otlp.py`），其余端待跟进。
+> **状态（2026-11-07）**：D3「OTel 对齐」规范真源。适配器 + 内置 exporter 已在
+> Python（`logging-framework/python/AgentLog/agentlog/otlp.py`、`otlp_http.py`）与
+> Go（`logging-framework/go/AgentLog/agentlog/otlp.go`、`otlp_http.go`）落地，
+> 其余端待跟进；两端产出的 body 已逐字对齐（见 §9.3）。
 > 本文件与实现**必须同步演进**：改动映射 = 同时改本文件与各端适配器 + 测试。
 
 ## 1. 定位与边界
@@ -179,6 +181,10 @@ Schema v1 的 `trace_id` 只要求"与 traceparent 同源的不透明字符串"�
 | Web / TS | ⬜ 待实现 | — |
 | Kotlin / Android | ⬜ 待实现 | — |
 | Swift / macOS | ⬜ 待实现（OTel Swift 的 logs 仍为 Beta，优先级最低） | — |
+
+> 表内状态只针对 **OTLP 适配器/exporter**。Schema v1.1 的 `span_id` **产出**六端已全部落地
+> （Python / Go / Java / Kotlin / Web / Swift 各有 `normalize` + 序列化边界丢弃非法值的实现），
+> 因而任何一端一旦补上适配器，都能直接透传业务绑定或自动埋点写入的 span id。
 
 验证方式：
 

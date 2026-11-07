@@ -113,6 +113,6 @@ Schema v1 是**事件源**格式，OTel/OTLP 是**传输与后端**标准，二�
 - 每条事件 → 一条 OTLP `LogRecord`；
 - `network_request` / `db_query` → 额外一条 `SPAN_KIND_CLIENT` Span（HTTP / Database 语义约定）；
 - `critical` → `FATAL`(21)；`payload.*` 展平为 `payload.<k>` 属性；
-- `traceId`/`spanId` 由 SHA-256 **确定性派生**（Schema 无 `span_id`，且重试需幂等）。
+- `traceId`：32 位 hex 原样透传，其余字符串 SHA-256 派生；`spanId`：事件自带合法 `span_id`（v1.1）优先原样透传，缺失才 SHA-256 派生——派生不引入随机性，重试与重放保持幂等。
 
-首个实现：Python `agentlog/otlp.py`（`to_otlp` / `OTLPSink`，仅标准库），其余端待跟进。
+已实现（适配器 + HTTP exporter）：Python `agentlog/otlp.py` / `agentlog/otlp_http.py`、Go `agentlog/otlp.go` / `agentlog/otlp_http.go`，其余端待跟进。端到端验证见 `tools/otlp-compat-verify/`（假 Collector + 双端真实往返）。
