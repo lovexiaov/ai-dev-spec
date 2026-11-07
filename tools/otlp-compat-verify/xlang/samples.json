@@ -76,5 +76,15 @@
       "view": "LoginScreen",
       "action": "submit"
     }
+  },
+  {
+    "ts": "2026-11-02T13:37:25.000Z",
+    "level": "info",
+    "service": "checkout-api",
+    "event_type": "log",
+    "session_id": "sess-20261102-01",
+    "agent_auto": false,
+    "message": "non-hex trace id must be dropped",
+    "trace_id": "trace-abc-123"
   }
 ]

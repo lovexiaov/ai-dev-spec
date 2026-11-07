@@ -22,7 +22,7 @@ agent-log 与 OTel 不是竞争关系，而是**两层**：
    - `network_request` → `SPAN_KIND_CLIENT`，套 HTTP 语义约定；
    - `db_query` → `SPAN_KIND_CLIENT`，套 Database 语义约定。
 3. **其余事件不发 span**：`log` / `ui_interaction` / `screen_view` 不是"调用跨度"，`crash` / `hang` 留在 logs 信号（附 `exception.*` 属性）。
-4. **id 优先透传、缺失才派生**（见 §6）：事件自带合法 `span_id` 时原样使用；缺失时确定性派生，保证同一事件重复导出得到同一 `traceId`/`spanId`，重试与重放幂等。
+4. **id 优先透传、span 缺失才派生**（见 §6）：`trace_id` 与 `span_id` 合法即透传（v1.2 起均为固定长度 hex）；仅 span 缺失 `span_id` 时确定性派生，保证同一事件重复导出得到同一 `spanId`，重试与重放幂等。
 5. **OTLP 是传输格式，不是存储格式**：`payload` 展平后作为属性发送，不做二次脱敏——脱敏已在 logger 层完成（C6）。
 
 ## 3. 事件 → LogRecord
@@ -85,20 +85,22 @@ agent-log 与 OTel 不是竞争关系，而是**两层**：
 
 ## 6. id 规则（确定性）
 
-Schema v1 的 `trace_id` 只要求"与 traceparent 同源的不透明字符串"，未约束格式；OTLP 要求 `traceId` = 16 字节、`spanId` = 8 字节。Schema v1.1 起事件可自带 `span_id`（16 位小写 hex，8 字节），**优先使用事件自带值**，仅在缺失时派生：
+Schema v1.2 起 `trace_id` 收紧为 **32 位小写 hex**（8 字节，与 OTLP `traceId` / W3C `traceparent` 的 trace-id 同构），`span_id` 为 16 位小写 hex（8 字节）。两者策略一致：**合法值透传（大写归一为小写），非法值在写入边界丢弃（事件照写）—— 适配器绝不变形、绝不派生用户 id**：
 
 | 场景 | 规则 |
 | --- | --- |
-| 事件自带合法 `span_id`（v1.1） | 原样使用（大写归一为小写）；LogRecord 与 span 共用该 id |
-| `trace_id` 是 32 位 hex | 原样转小写使用 |
-| `trace_id` 是其他字符串 | `sha256("agentlog:trace:" + raw)[:32]` |
-| 事件无 `trace_id` | LogRecord **不带** `traceId`/`spanId`；若该事件要发 span，则用 `sha256("agentlog:session:" + session_id)[:32]` 作为该会话的合成 trace |
-| `span_id` 缺失或非法 | `sha256("agentlog:span:" + session_id + trace_id + event_type + ts + message)[:16]` |
+| 事件自带合法 `trace_id`（v1.2） | 原样透传（大写归一为小写）——日志、OTLP、Jaeger 三处同一个值 |
+| `trace_id` 非法或缺失 | 写入边界丢弃该字段，事件本身照写；LogRecord 不带 `traceId`/`spanId` |
+| 事件自带合法 `span_id`（v1.1） | 原样透传；LogRecord 与 span 共用该 id |
+| `span_id` 缺失或非法（仅当该事件要发 span） | `sha256("agentlog:span:" + session_id + trace_id + event_type + ts + message)[:16]` 确定性派生 |
+| 无 trace 的事件要发 span | 用 `sha256("agentlog:session:" + session_id)[:32]` 作为该会话的合成 trace |
 
 要点：
 
-- **不引入随机性**：重放/重试不会产生重复 span。
-- **自带 span_id 优先**：埋点方在操作开始时生成 span_id 并绑定到 logger（如 `logger.child({"trace_id": ..., "span_id": ...})`），该操作内所有事件与导出的 span 共享同一 id，Agent 能据此把"日志行"和"链路节点"精确对上。
+- **为什么不哈希非 hex 的 `trace_id`**：哈希不可逆——调用方写 `checkout-flow-42`，Jaeger 里只能看到 `7f3a…`，反推不回原值，需要额外的补偿属性才能搜索；且「同一个 id 的两种写法」可能派生出两个不同 trace（如 UUID 带横线与去横线）。强制 hex 让割裂在源头消失：**想用 trace 关联，就按规范填；不填或不规范，丢的是 trace 关联，不是日志**。
+- **上游非 hex id 的对接**：在系统边界（网关 / 入口服务）显式转换为 32 位 hex 并自行维护映射——这是业务决策，不由日志库偷偷变形（哈希提供的「聚合」无法与上游真实链路对上，是假关联）。
+- **生成便利**：各端 SDK 提供 `newTraceId()`（uuid4 去横线）；session id 默认值同为 32 位 hex，因此 `trace_id = session_id` 这个最自然的绑定永远合法。
+- **span 派生不引入随机性**：重放/重试不会产生重复 span；`span_id` 缺失时的派生种子包含原始 `trace_id` 字符串，六端一致。
 - **同一会话无 trace 的多个 span 归入同一条合成 trace**，而不是每个 span 一条 trace（后者在 Jaeger 里会变成大量孤立单 span 链路）。
 - `traceId`/`spanId` 在 OTLP/JSON 中是 **hex 字符串**（OTLP 对这两个字段的 JSON 表示是 hex，而非 protobuf 通用的 base64）——这是规范特例，务必不要按 base64 处理。
 
@@ -175,16 +177,16 @@ Schema v1 的 `trace_id` 只要求"与 traceparent 同源的不透明字符串"�
 
 | 端 | 状态 | 入口 |
 | --- | --- | --- |
-| Python | ✅ 适配器 + ✅ exporter（v1.0.0；支持 Schema v1.1 `span_id` 透传） | `agentlog/otlp.py`：`to_otlp` / `to_otlp_logs` / `to_otlp_spans` / `event_to_log_record` / `event_to_span` / `OTLPSink`；`agentlog/otlp_http.py`：`OTLPExporter` |
-| Go | ✅ 适配器 + ✅ exporter（v1.0.0；支持 `span_id` 产出与透传） | `agentlog/otlp.go`：`ToOTLP` / `ToOTLPLogs` / `ToOTLPSpans` / `EventToLogRecord` / `EventToSpan` / `OTLPSink`；`agentlog/otlp_http.go`：`OTLPExporter` |
-| Java | ✅ 适配器（v1.0.0；零第三方依赖，仅 `java.base`） | `OtlpMapper`：`toOtlp` / `toOtlpLogs` / `toOtlpSpans` / `eventToLogRecord` / `eventToSpan` / 内嵌 `OtlpSink implements LogSink` |
-| Web / TS | ✅ 适配器（v1.0.0；浏览器可用：同步 SHA-256 自实现、纳秒走 BigInt） | `src/otlp.ts`：`toOtlp` / `toOtlpLogs` / `toOtlpSpans` / `eventToLogRecord` / `eventToSpan` / `createOtlpSink`；哈希在 `src/sha256.ts`、`src/ids.ts` |
-| Kotlin / Android | ✅ 适配器（v1.0.0；复用包内 `Json` 树，零第三方依赖） | `OtlpMapper`（`object`）：`toOtlp` / `toOtlpLogs` / `toOtlpSpans` / `eventToLogRecord` / `eventToSpan` / 内嵌 `OtlpSink : LogSink` |
-| Swift / macOS | ✅ 适配器（v1.0.0；只依赖 Foundation + CryptoKit，不绑定 OTel Swift SDK） | `OtlpMapper`：`toOtlp` / `toOtlpLogs` / `toOtlpSpans` / `logRecord(for:)` / `span(for:)` / `json(_:)`；`AgentLogExporter.otlpBatch(extraResource:)` |
+| Python | ✅ 适配器 + ✅ exporter（v1.0.0；Schema v1.2 `trace_id` + v1.1 `span_id` 边界校验、`new_trace_id()`） | `agentlog/otlp.py`：`to_otlp` / `to_otlp_logs` / `to_otlp_spans` / `event_to_log_record` / `event_to_span` / `OTLPSink`；`agentlog/otlp_http.py`：`OTLPExporter` |
+| Go | ✅ 适配器 + ✅ exporter（v1.0.0；`NormalizeTraceID` / `NewTraceID`） | `agentlog/otlp.go`：`ToOTLP` / `ToOTLPLogs` / `ToOTLPSpans` / `EventToLogRecord` / `EventToSpan` / `OTLPSink`；`agentlog/otlp_http.go`：`OTLPExporter` |
+| Java | ✅ 适配器（v1.0.0；零第三方依赖，仅 `java.base`；`CoreTypes.TraceId`） | `OtlpMapper`：`toOtlp` / `toOtlpLogs` / `toOtlpSpans` / `eventToLogRecord` / `eventToSpan` / 内嵌 `OtlpSink implements LogSink` |
+| Web / TS | ✅ 适配器（v1.0.0；浏览器可用：同步 SHA-256 自实现、纳秒走 BigInt；`normalizeTraceId` / `newTraceId`） | `src/otlp.ts`：`toOtlp` / `toOtlpLogs` / `toOtlpSpans` / `eventToLogRecord` / `eventToSpan` / `createOtlpSink`；`src/ids.ts`、`src/trace.ts` |
+| Kotlin / Android | ✅ 适配器（v1.0.0；复用包内 `Json` 树，零第三方依赖；`TraceId` object） | `OtlpMapper`（`object`）：`toOtlp` / `toOtlpLogs` / `toOtlpSpans` / `eventToLogRecord` / `eventToSpan` / 内嵌 `OtlpSink : LogSink` |
+| Swift / macOS | ✅ 适配器（v1.0.0；只依赖 Foundation + CryptoKit；`TraceIdentifier`） | `OtlpMapper`：`toOtlp` / `toOtlpLogs` / `toOtlpSpans` / `logRecord(for:)` / `span(for:)` / `json(_:)`；`AgentLogExporter.otlpBatch(extraResource:)` |
 
-> 表内状态只针对 **OTLP 适配器/exporter**。Schema v1.1 的 `span_id` **产出**六端已全部落地
-> （Python / Go / Java / Kotlin / Web / Swift 各有 `normalize` + 序列化边界丢弃非法值的实现），
-> 因而任何一端一旦补上适配器，都能直接透传业务绑定或自动埋点写入的 span id。
+> 表内状态只针对 **OTLP 适配器/exporter**。Schema v1.2（`trace_id` 收紧 32-hex）与 v1.1
+> （`span_id`）的**边界校验**六端已全部落地（各有 `normalize` + 序列化边界丢弃非法值的实现，
+> session id 默认值均为 32-hex，各端提供 `newTraceId()` 类便利函数）。
 >
 > **HTTP exporter 目前仅 Python / Go 两端有**；其余四端只有适配器（结构转换是纯函数，
 > 传输交回宿主平台：Java 用 `HttpClient`、Kotlin 用 `OkHttp`、Web 用 `fetch`、Swift 用 `URLSession`，
@@ -192,8 +194,9 @@ Schema v1 的 `trace_id` 只要求"与 traceparent 同源的不透明字符串"�
 
 ### 10.1 跨端一致性验证
 
-`tools/otlp-compat-verify/xlang_verify.py` 用**同一批 5 条样例事件**（`xlang/samples.json`，
-覆盖 log / network_request / db_query / crash / ui_interaction 五类）逐端 dump 出
+`tools/otlp-compat-verify/xlang_verify.py` 用**同一批 6 条样例事件**（`xlang/samples.json`，
+覆盖 log / network_request / db_query / crash / ui_interaction 五类，外加一条**非 hex
+`trace_id`** 样例验证六端都按无 trace 处理）逐端 dump 出
 `logs` + `traces` 两份 OTLP/JSON，与 Python 基准做结构化比对：
 
 ```bash
