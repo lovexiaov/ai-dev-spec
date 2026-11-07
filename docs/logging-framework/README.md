@@ -115,4 +115,18 @@ Schema v1 是**事件源**格式，OTel/OTLP 是**传输与后端**标准，二�
 - `critical` → `FATAL`(21)；`payload.*` 展平为 `payload.<k>` 属性；
 - `traceId`：32 位 hex 原样透传，其余字符串 SHA-256 派生；`spanId`：事件自带合法 `span_id`（v1.1）优先原样透传，缺失才 SHA-256 派生——派生不引入随机性，重试与重放保持幂等。
 
-已实现（适配器 + HTTP exporter）：Python `agentlog/otlp.py` / `agentlog/otlp_http.py`、Go `agentlog/otlp.go` / `agentlog/otlp_http.go`，其余端待跟进。端到端验证见 `tools/otlp-compat-verify/`（假 Collector + 双端真实往返）。
+已实现（**六端适配器齐全**）：
+
+| 端 | 适配器 | HTTP exporter |
+| --- | --- | --- |
+| Python | `agentlog/otlp.py` | ✅ `agentlog/otlp_http.py` |
+| Go | `agentlog/otlp.go` | ✅ `agentlog/otlp_http.go` |
+| Java | `OtlpMapper` | 交由宿主 `HttpClient` 组装 |
+| Web / TS | `src/otlp.ts`（同步 SHA-256、BigInt 纳秒） | 交由宿主 `fetch` 组装 |
+| Kotlin / Android | `OtlpMapper` | 交由宿主 `OkHttp` 组装 |
+| Swift / macOS | `OtlpMapper` | 交由宿主 `URLSession` 组装 |
+
+六端用**同一批样例事件**做过逐节点比对：`python3 tools/otlp-compat-verify/xlang_verify.py`
+（工具链缺失的端会 `SKIP`，可用的端必然参与；`traces` 六端逐字一致）。端到端往返验证见
+`tools/otlp-compat-verify/` 的假 Collector + `e2e_demo.py`；跨语言差异说明见
+[`OTLP-MAPPING.md` §10.2](./OTLP-MAPPING.md)（仅 `payload` 原始数字的 int/double 表示不同，语义等价）。

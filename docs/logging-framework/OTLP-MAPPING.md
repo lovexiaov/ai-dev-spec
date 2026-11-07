@@ -177,21 +177,65 @@ Schema v1 的 `trace_id` 只要求"与 traceparent 同源的不透明字符串"�
 | --- | --- | --- |
 | Python | ✅ 适配器 + ✅ exporter（v1.0.0；支持 Schema v1.1 `span_id` 透传） | `agentlog/otlp.py`：`to_otlp` / `to_otlp_logs` / `to_otlp_spans` / `event_to_log_record` / `event_to_span` / `OTLPSink`；`agentlog/otlp_http.py`：`OTLPExporter` |
 | Go | ✅ 适配器 + ✅ exporter（v1.0.0；支持 `span_id` 产出与透传） | `agentlog/otlp.go`：`ToOTLP` / `ToOTLPLogs` / `ToOTLPSpans` / `EventToLogRecord` / `EventToSpan` / `OTLPSink`；`agentlog/otlp_http.go`：`OTLPExporter` |
-| Java | ⬜ 待实现 | — |
-| Web / TS | ⬜ 待实现 | — |
-| Kotlin / Android | ⬜ 待实现 | — |
-| Swift / macOS | ⬜ 待实现（OTel Swift 的 logs 仍为 Beta，优先级最低） | — |
+| Java | ✅ 适配器（v1.0.0；零第三方依赖，仅 `java.base`） | `OtlpMapper`：`toOtlp` / `toOtlpLogs` / `toOtlpSpans` / `eventToLogRecord` / `eventToSpan` / 内嵌 `OtlpSink implements LogSink` |
+| Web / TS | ✅ 适配器（v1.0.0；浏览器可用：同步 SHA-256 自实现、纳秒走 BigInt） | `src/otlp.ts`：`toOtlp` / `toOtlpLogs` / `toOtlpSpans` / `eventToLogRecord` / `eventToSpan` / `createOtlpSink`；哈希在 `src/sha256.ts`、`src/ids.ts` |
+| Kotlin / Android | ✅ 适配器（v1.0.0；复用包内 `Json` 树，零第三方依赖） | `OtlpMapper`（`object`）：`toOtlp` / `toOtlpLogs` / `toOtlpSpans` / `eventToLogRecord` / `eventToSpan` / 内嵌 `OtlpSink : LogSink` |
+| Swift / macOS | ✅ 适配器（v1.0.0；只依赖 Foundation + CryptoKit，不绑定 OTel Swift SDK） | `OtlpMapper`：`toOtlp` / `toOtlpLogs` / `toOtlpSpans` / `logRecord(for:)` / `span(for:)` / `json(_:)`；`AgentLogExporter.otlpBatch(extraResource:)` |
 
 > 表内状态只针对 **OTLP 适配器/exporter**。Schema v1.1 的 `span_id` **产出**六端已全部落地
 > （Python / Go / Java / Kotlin / Web / Swift 各有 `normalize` + 序列化边界丢弃非法值的实现），
 > 因而任何一端一旦补上适配器，都能直接透传业务绑定或自动埋点写入的 span id。
+>
+> **HTTP exporter 目前仅 Python / Go 两端有**；其余四端只有适配器（结构转换是纯函数，
+> 传输交回宿主平台：Java 用 `HttpClient`、Kotlin 用 `OkHttp`、Web 用 `fetch`、Swift 用 `URLSession`，
+> 由接入方按自身重试/退出策略组装，避免把平台 HTTP 栈硬塞进底座）。
+
+### 10.1 跨端一致性验证
+
+`tools/otlp-compat-verify/xlang_verify.py` 用**同一批 5 条样例事件**（`xlang/samples.json`，
+覆盖 log / network_request / db_query / crash / ui_interaction 五类）逐端 dump 出
+`logs` + `traces` 两份 OTLP/JSON，与 Python 基准做结构化比对：
+
+```bash
+python3 tools/otlp-compat-verify/xlang_verify.py            # 六端全跑
+python3 tools/otlp-compat-verify/xlang_verify.py --only java,go
+```
+
+- 比对前归一化：键递归排序、`KeyValue` 列表按 `key` 排序（语义无序）、剔除逐语言必然不同的
+  `telemetry.sdk.language`。
+- 各端 dump harness 在 `xlang/harness/`：`dump.py` / `main.go` / `XlangMain.java` / `Dump.kt` /
+  `dump.mjs` / `main.swift`，都只做「读样例 → 调本端 `toOtlp` → 写文件」，不含任何断言或期望值。
+- 工具链缺失或构建失败会 `SKIP` 而非判失败；一旦某端可用就必然参与比对（不存在"悄悄跳过"）。
+- 退出码：全一致 `0`、存在真实差异 `1`、基准不可用或全部跳过 `2`。
+
+实测（六端全部可用）：`java` / `kotlin` 与基准**逐字一致**，`go` / `web` / `swift` 仅剩下述
+数字表示差异，`traces` 六端**逐字一致**。
+
+### 10.2 已知跨语言差异（仅数字表示，语义等价）
+
+比对发现的差异全部可归因于**语言数字模型**，而非映射逻辑，因此被工具归类为
+`number-model` 并容忍；其余任何差异都判失败。
+
+| 差异 | 场景 | 原因 |
+| --- | --- | --- |
+| `intValue:"120"` ↔ `doubleValue:120.0` | `payload.duration_ms: 120.0` | JS/Swift/Python 不区分 int/float 或按解析路径落成整数值；Kotlin/Java 的解析器保留 `Double` |
+| `doubleValue:200` ↔ `intValue:"200"` | `payload.status_code: 200` | Go 用 `encoding/json` 解码输入时数字统一成 `float64`，无法回推原始整数性 |
+
+两者在 OTLP 语义上等价（`intValue` 与 `doubleValue` 都是 `AnyValue` 的数值分支）。若要完全消除：
+
+- Go 侧需改用 `json.Decoder.UseNumber()` 并按字面量判断整数性（会改变对外 `map[string]interface{}` 的值类型，属于破坏性变更，暂不做）；
+- 其余端需在解析层引入"整数/浮点"标记（等于自造数字类型，收益低）。
+
+**注意**：这一差异只影响 `payload` 里的原始数字。适配器自身产出的整数字段
+（`severityNumber`、`kind`、`http.response.status_code` 的 `intValue`、纳秒字符串）六端一致，
+已验证逐字相同。
 
 验证方式：
 
-- 端内单测：Python `tests/test_otlp.py`（36 项，覆盖级别/时区/类型/id/span/分组/sink/资源冲突）+ `tests/test_otlp_http.py`（14 项，覆盖请求形状/重试矩阵/退避/headers/断链）；Go `agentlog/otlp_test.go`（25 项）+ `agentlog/otlp_http_test.go`（11 项）+ `agentlog/span_test.go`（6 项）。
+- 端内单测：Python `tests/test_otlp.py`（38 项）+ `tests/test_otlp_http.py`（14 项）；Go `agentlog/otlp_test.go`（25 项）+ `agentlog/otlp_http_test.go`（11 项）+ `agentlog/span_test.go`（6 项）；Java `OtlpMapperTests`（27 项）；Web `src/otlp.test.ts`（37 项）；Kotlin `OtlpMapperTests`（25 项）；Swift `Tests/AgentLogTests/OtlpMapperTests.swift`（25 项）。六端断言的是**同一组不变量**（级别表、id 派生、LogRecord 形状、HTTP/DB span 语义、resource 分组、extraResource 冲突）。
 - 规范对照脚本：`tools/otlp-compat-verify/validate.py`（零依赖，套用真实 `schema/log-event.schema.json` 校验 5 类样例事件）。
 - 端到端：`tools/otlp-compat-verify/e2e_demo.py`（真实 HTTP 往返，Go + Python 双端到同一 Collector）。
-- 跨端一致性抽查：同一输入在 Python 与 Go 两端产出的 `severityNumber`、`traceId`/`spanId` 派生值、span 名称与属性键**逐字相同**（id 派生种子字符串两端一致，实测一致；仅 `telemetry.sdk.language`/`version` 因语言而异）。
+- 跨端一致性：`tools/otlp-compat-verify/xlang_verify.py`（六端全量，见 §10.1）。
 
 ## 11. 风险与注意
 

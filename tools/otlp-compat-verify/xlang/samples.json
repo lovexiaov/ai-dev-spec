@@ -1,0 +1,80 @@
+[
+  {
+    "ts": "2026-11-02T13:37:21.123Z",
+    "level": "info",
+    "service": "web-api",
+    "event_type": "log",
+    "session_id": "sess-0001",
+    "agent_auto": false,
+    "message": "user logged in",
+    "env": "prod",
+    "user_id": "u_123",
+    "category": "auth",
+    "payload": {
+      "order_id": "o_99",
+      "amount": 12.5
+    }
+  },
+  {
+    "ts": "2026-11-02T13:37:22.000Z",
+    "level": "debug",
+    "service": "web-api",
+    "event_type": "network_request",
+    "session_id": "sess-0001",
+    "agent_auto": true,
+    "message": "GET https://api.x.com/v1/user -> 200",
+    "env": "prod",
+    "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736",
+    "payload": {
+      "method": "GET",
+      "url": "https://api.x.com/v1/user",
+      "status_code": 200,
+      "server_address": "api.x.com",
+      "duration_ms": 42.5
+    }
+  },
+  {
+    "ts": "2026-11-02T13:37:23.500Z",
+    "level": "warn",
+    "service": "billing-svc",
+    "event_type": "db_query",
+    "session_id": "sess-0001",
+    "agent_auto": true,
+    "message": "SELECT took 120ms",
+    "env": "prod",
+    "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736",
+    "payload": {
+      "db_system": "postgresql",
+      "operation": "SELECT",
+      "statement": "SELECT * FROM orders WHERE id=$1",
+      "duration_ms": 120.0
+    }
+  },
+  {
+    "ts": "2026-11-02T13:37:25.000Z",
+    "level": "critical",
+    "service": "ios-app",
+    "event_type": "crash",
+    "session_id": "sess-0001",
+    "agent_auto": true,
+    "message": "uncaught exception",
+    "env": "prod",
+    "payload": {
+      "exception.type": "NSException",
+      "exception.message": "index out of bounds"
+    }
+  },
+  {
+    "ts": "2026-11-02T13:37:26.000Z",
+    "level": "trace",
+    "service": "ios-app",
+    "event_type": "ui_interaction",
+    "session_id": "sess-0001",
+    "agent_auto": true,
+    "message": "button tapped",
+    "payload": {
+      "view": "LoginScreen",
+      "action": "submit"
+    }
+  }
+]
