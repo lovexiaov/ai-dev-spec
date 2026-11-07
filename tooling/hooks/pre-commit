@@ -12,7 +12,10 @@ if printf '%s\n' "$staged" | grep -E '(^|/)\.env$|(^|/)\.env\.[^e][^x]|secrets?\
 fi
 
 echo "🔍 [pre-commit] 扫描密钥内容 ..."
-if git diff --cached -U0 | grep -Ei '^(+| )' | grep -Ei '(AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{36}|xox[baprs]-[A-Za-z0-9-]+|sk-[A-Za-z0-9]{32,}|-----BEGIN [A-Z ]*PRIVATE KEY-----|AIza[0-9A-Za-z_-]{35})'; then
+# 注意：这里必须用 '^[+ ]' 而非 '^(+| )'。后者在 ERE 里是把 '+' 当量词放在组首，
+# grep 会直接报 "repetition-operator operand invalid" 并退出，管道无输出 → if 恒假
+# → 密钥特征扫描被静默跳过。
+if git diff --cached -U0 | grep -Ei '^[+ ]' | grep -Ei '(AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{36}|xox[baprs]-[A-Za-z0-9-]+|sk-[A-Za-z0-9]{32,}|-----BEGIN [A-Z ]*PRIVATE KEY-----|AIza[0-9A-Za-z_-]{35})'; then
   echo "❌ 检测到疑似密钥内容泄露，提交被拒绝。请移除凭据后重试。"
   exit 1
 fi
