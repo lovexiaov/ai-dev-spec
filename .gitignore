@@ -31,3 +31,7 @@ Thumbs.db
 
 # 框架产物（AgentLog 导出的运行日志）
 *.agent-log.jsonl
+
+# Python bytecode
+__pycache__/
+*.pyc
