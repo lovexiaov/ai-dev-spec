@@ -1,6 +1,6 @@
 # 面向 Agent 的统一日志框架 · 通用接入规范（语言无关）
 
-> **状态（2026-11-07）**：**Schema v1 已冻结**，各端实现均已抽为独立仓库、以 submodule 挂入并通过测试：Web `logging-framework/web/Observability`（[`agent-log-web`](https://github.com/lovexiaov/agent-log-web)）、macOS `logging-framework/macos/AgentLog`（`agent-log-macos`）、Android `logging-framework/android/AgentLog`（[`agent-log-android`](https://github.com/lovexiaov/agent-log-android)）、Java `logging-framework/java/AgentLog`（[`agent-log-java`](https://github.com/lovexiaov/agent-log-java)）、Go `logging-framework/go/AgentLog`（[`agent-log-go`](https://github.com/lovexiaov/agent-log-go)）、Python `logging-framework/python/AgentLog`（[`agent-log-python`](https://github.com/lovexiaov/agent-log-python)）。
+> **状态（2026-11-07）**：**Schema v1.1 已冻结**（相对 v1.0 为向后兼容增量：新增可选顶层 `span_id`），各端实现均已抽为独立仓库、以 submodule 挂入并通过测试：Web `logging-framework/web/Observability`（[`agent-log-web`](https://github.com/lovexiaov/agent-log-web)）、macOS `logging-framework/macos/AgentLog`（`agent-log-macos`）、Android `logging-framework/android/AgentLog`（[`agent-log-android`](https://github.com/lovexiaov/agent-log-android)）、Java `logging-framework/java/AgentLog`（[`agent-log-java`](https://github.com/lovexiaov/agent-log-java)）、Go `logging-framework/go/AgentLog`（[`agent-log-go`](https://github.com/lovexiaov/agent-log-go)）、Python `logging-framework/python/AgentLog`（[`agent-log-python`](https://github.com/lovexiaov/agent-log-python)）。
 > 平台专属实现与完整设计以子模块 `logging-framework/macos/AgentLog/Docs/macos-agent-logging-design.md` 为**真源**。
 > 本文件只沉淀**通用、语言无关**的约束，供所有端（Web / macOS / 服务端 / 其他）共同遵守。
 
@@ -34,6 +34,7 @@
 | `agent_auto` | ✅   | bool   | `true` = 框架自动埋点                        |
 | `message`    | ✅   | string | 人可读摘要（已脱敏）                         |
 | `trace_id`   | ❌   | string | 跨端追踪串联，与 `traceparent` 同源          |
+| `span_id`    | ❌   | string | 操作跨度标识（v1.1）：16 位小写 hex（8 字节），与 `trace_id` 配合 |
 | `subsystem`  | ❌   | string | 子系统，通常为反向域名                       |
 | `category`   | ❌   | string | 业务分类                                     |
 | `env`        | ❌   | string | dev / staging / prod                         |
@@ -51,6 +52,7 @@
 
 - 顶层字段集**封闭**（schema 中 `additionalProperties: false`）。新增字段 = 升 schema 版本，禁止各端私加。
 - 业务自定义字段一律进 `payload`，键名 snake_case。
+- **v1.1（2026-11-07，向后兼容增量）**：新增可选顶层字段 `span_id`。`required` 不变，不写该字段的日志在 v1.0 与 v1.1 下都合法；写了该字段的日志需要 v1.1 及以上的校验器（严格按 v1.0 schema 校验会因未知字段被拒）。六端的 schema 副本与 C7 允许集已同步到 v1.1。
 
 ### 3.4 内部命名 ↔ 线格式映射
 
@@ -62,10 +64,25 @@
 | 事件名   | `event_type`         | `extra.event`        | `eventType`          |
 | 会话     | `session_id`         | `extra.sessionId`    | `sessionId`          |
 | 追踪     | `trace_id`           | `extra.traceId`      | `traceId`            |
+| 跨度     | `span_id`            | `extra.spanId`       | `spanId`             |
 | 自动埋点 | `agent_auto`         | `extra.agentAuto`    | `agentAuto`          |
 | 上下文   | `payload`            | 其余 `extra` 键      | `payload`            |
 
 > Java / Go / Python 端同样沿用「内部 camelCase → 序列化边界 snake_case」的映射，线格式与其他端逐字一致（字段名、6 档 level、封闭顶层）。
+
+### 3.5 payload 标准词表（v1.1）
+
+`payload` 的键属于业务自定义范围，但**同一语义在六端必须同一个键名**（C2 的延伸）。已知会被 Agent 与导出适配器消费的语义，统一如下：
+
+| event_type | payload 键 | 类型 | 说明 |
+| --- | --- | --- | --- |
+| `network_request` | `method` / `url` / `status_code` / `duration_ms` | string / string / int / int | HTTP 调用 |
+| `db_query` | `operation` / `statement` / `duration_ms` / `rows_affected` / `error` | string / string / int / int / string | 数据库调用；SQL 文本一律 `statement` |
+| `crash` / `hang` | `exception` / `stack` / `thread` | string / string / string | 崩溃/卡顿现场 |
+| 任意 | `error` | string | 失败原因（成功时为空或省略） |
+
+- **写入端**只允许上表键名；`db_query` 禁止再写 `query` / `sql`（v1.1 前 Go/Java 的历史写法）。
+- **读取端**（Agent、OTLP 适配器）可对历史数据做兼容：`statement > sql > query`，仅此一处允许别名。
 
 ## 4. 已确认假设（通用部分）
 
