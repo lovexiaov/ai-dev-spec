@@ -13,7 +13,9 @@ if printf '%s\n' "$staged_files" | grep -E '(^|/)\.env$|(^|/)\.env\.[^e][^x]|sec
 fi
 
 # 2) 扫描暂存内容里的密钥特征（兜底，防手滑把 token 写进代码）
-if git diff --cached -U0 | grep -Ei '^(+| )' | grep -Ei '(AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{36}|xox[baprs]-[A-Za-z0-9-]+|sk-[A-Za-z0-9]{32,}|-----BEGIN [A-Z ]*PRIVATE KEY-----|AIza[0-9A-Za-z_-]{35})'; then
+# 用 '^[+ ]' 而非 '^(+| )'：后者把 '+' 当量词置于组首，grep 会直接报
+# "repetition-operator operand invalid" 退出，管道无输出→if 恒假→此扫描被静默跳过。
+if git diff --cached -U0 | grep -Ei '^[+ ]' | grep -Ei '(AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{36}|xox[baprs]-[A-Za-z0-9-]+|sk-[A-Za-z0-9]{32,}|-----BEGIN [A-Z ]*PRIVATE KEY-----|AIza[0-9A-Za-z_-]{35})'; then
   echo "❌ 检测到疑似密钥内容泄露，提交被拒绝。请移除凭据后重试。"
   exit 1
 fi
