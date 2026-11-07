@@ -12,7 +12,7 @@ jobs:
   quality:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # 子模块本身就是 pnpm workspace 成员，不拉取则 install 必挂。
           # 三个仓库均已 public，默认 GITHUB_TOKEN 即可拉取，无需额外 PAT。
@@ -21,15 +21,15 @@ jobs:
       # 门禁会调用各语言子模块的构建链：Kotlin 2.0.x 编译器无法在 JDK 25（runner 默认）上运行
       # （Internal compiler error），且 JavaCompile 默认跟随运行 JDK 会导致 JVM-target 不一致。
       # 显式固定 JDK 17，与 android 子模块的 `kotlin { jvmToolchain(17) }` 对齐。
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: "17"
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v6
         # 不写 version：版本由 package.json 的 packageManager 决定。
         # 写死 version 会与之冲突并报 Multiple versions of pnpm specified。
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: pnpm
@@ -45,20 +45,20 @@ jobs:
   security:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           # gitleaks 需要完整历史才能扫描全部 commit
           fetch-depth: 0
 
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v4
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           # 此处不设 cache：security job 不装依赖，pnpm store 目录不存在，
           # setup-node 的 post 步骤保存缓存时会报 Path Validation Error 并让 job 失败。
 
       - name: Secret scan
-        uses: gitleaks/gitleaks-action@v2
+        uses: gitleaks/gitleaks-action@v3
         # 兜底：任何密钥泄露直接失败（对应 AGENTS.md NEVER 提交凭据）
       - name: Dependency audit
         run: pnpm audit --prod
