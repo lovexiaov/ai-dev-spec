@@ -88,3 +88,14 @@
 - 字段、脱敏策略、trace 串联、结构化输出四原则贯通所有端。
 - 禁止业务直连底层日志库；统一经薄封装接入，避免"每端一套日志方言"。
 - 新增端接入时，必须先通过 §2 C7 的字段集断言测试，再谈功能。
+
+## 7. OTel / OTLP 对齐（D3）
+
+Schema v1 是**事件源**格式，OTel/OTLP 是**传输与后端**标准，二者互补而非替代。映射规范真源见 [`OTLP-MAPPING.md`](./OTLP-MAPPING.md)：
+
+- 每条事件 → 一条 OTLP `LogRecord`；
+- `network_request` / `db_query` → 额外一条 `SPAN_KIND_CLIENT` Span（HTTP / Database 语义约定）；
+- `critical` → `FATAL`(21)；`payload.*` 展平为 `payload.<k>` 属性；
+- `traceId`/`spanId` 由 SHA-256 **确定性派生**（Schema 无 `span_id`，且重试需幂等）。
+
+首个实现：Python `agentlog/otlp.py`（`to_otlp` / `OTLPSink`，仅标准库），其余端待跟进。
