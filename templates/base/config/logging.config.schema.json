@@ -12,6 +12,7 @@
     },
     "service": { "type": "string" },
     "env": { "type": "string" },
+    "release": { "type": "string", "maxLength": 128 },
     "redactPaths": { "type": "array", "items": { "type": "string" } },
     "sentry": {
       "type": "object",

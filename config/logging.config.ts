@@ -18,6 +18,8 @@ export interface LoggingConfig {
   service: string;
   /** 当前环境 */
   env: string;
+  /** 发布标识（可选）：semver / git sha / build number，写入每条日志的 release 字段 */
+  release?: string;
   /**
    * 脱敏字段路径（点分）。logger 层拦截，绝不依赖调用方自觉。
    * 例：'password'、'authorization'、'user.email'

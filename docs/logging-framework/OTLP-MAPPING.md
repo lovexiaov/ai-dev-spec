@@ -1,9 +1,10 @@
 # agent-log → OpenTelemetry (OTLP) 映射规范
 
-> **状态（2026-11-08，Schema v1.2.0）**：D3「OTel 对齐」规范真源。适配器 + 内置 exporter 已在
-> Python（`logging-framework/python/AgentLog/agentlog/otlp.py`、`otlp_http.py`）与
-> Go（`logging-framework/go/AgentLog/agentlog/otlp.go`、`otlp_http.go`）落地，
-> 其余端待跟进；两端产出的 body 已逐字对齐（见 §9.3）。
+> **状态（2026-11-10，Schema v1.3.0）**：D3「OTel 对齐」规范真源。六端适配器全部落地：
+> Python（`agentlog/otlp.py`）、Go（`agentlog/otlp.go`）、Java（`OtlpMapper`）、
+> Kotlin/Android（`OtlpMapper`）、Web/TS（`src/otlp.ts`）、Swift/macOS（`OtlpMapper`）；
+> 内置 HTTP exporter 仅 Python / Go 提供（其余端传输交宿主 `HttpClient` / `OkHttp` / `fetch` / `URLSession`）。
+> 六端产出已用同一批样例逐节点比对（§9.3）。
 > 本文件与实现**必须同步演进**：改动映射 = 同时改本文件与各端适配器 + 测试。
 
 ## 1. 定位与边界
@@ -34,6 +35,7 @@ agent-log 与 OTel 不是竞争关系，而是**两层**：
 | `level` | `severityText` + `severityNumber` | 见 §4 |
 | `service` | resource `service.name` | |
 | `env` | resource `deployment.environment` | OTel 语义约定 |
+| `release` | resource `service.version` | v1.3；属性顺序固定为 `service.name` → `deployment.environment` → `service.version` → `session.id` → `telemetry.*` |
 | `session_id` | resource `session.id` | OTel 语义约定 |
 | `trace_id` | `traceId` | 见 §6；无 `trace_id` 时省略该键 |
 | `event_type` | attribute `agent.event.type` | Agent 主过滤键 |
@@ -51,7 +53,11 @@ agent-log 与 OTel 不是竞争关系，而是**两层**：
 | --- | --- |
 | `exception` / `exception_type` | `exception.type` |
 | `exception_message` / `message` | `exception.message` |
-| `stack` / `stacktrace` | `exception.stacktrace` |
+| `stack` / `stacktrace` / `trace` | `exception.stacktrace` |
+| `mechanism` | 无标准映射，随 `payload.*` 展平为 `payload.mechanism` |
+
+- 读取侧同时接受 v1.3 标准键（`exception_message`）与历史键（`message`）：老日志照常映射，新日志按标准词表写入。
+- `release` 缺失时不写 `service.version`；调用方通过 `extraResource` 传入的同名键也不能覆盖事件自带的值（自身字段优先）。
 
 ## 4. 级别映射（6 → 6）
 
@@ -189,9 +195,10 @@ agent-log 与 OTel 不是竞争关系，而是**两层**：
 
 ### 10.1 跨端一致性验证
 
-`tools/otlp-compat-verify/xlang_verify.py` 用**同一批 6 条样例事件**（`xlang/samples.json`，
+`tools/otlp-compat-verify/xlang_verify.py` 用**同一批 7 条样例事件**（`xlang/samples.json`，
 覆盖 log / network_request / db_query / crash / ui_interaction 五类，外加一条**非 hex
-`trace_id`** 样例验证六端都按无 trace 处理）逐端 dump 出
+`trace_id`** 样例验证六端都按无 trace 处理，以及一条**带 `release` + 标准异常词表**的
+crash 样例验证 `service.version` 与 `exception.*` 映射）逐端 dump 出
 `logs` + `traces` 两份 OTLP/JSON，与 Python 基准做结构化比对：
 
 ```bash
@@ -206,8 +213,10 @@ python3 tools/otlp-compat-verify/xlang_verify.py --only java,go
 - 工具链缺失或构建失败会 `SKIP` 而非判失败；一旦某端可用就必然参与比对（不存在"悄悄跳过"）。
 - 退出码：全一致 `0`、存在真实差异 `1`、基准不可用或全部跳过 `2`。
 
-实测（六端全部可用）：`java` / `kotlin` 与基准**逐字一致**，`go` / `web` / `swift` 仅剩下述
-数字表示差异，`traces` 六端**逐字一致**。
+实测（六端全部可用，2026-11-10 / Schema v1.3.0）：`java` / `kotlin` 与基准**逐字一致**，
+`go` / `web` / `swift` 仅剩下述数字表示差异，`traces` 六端**逐字一致**；带 `release` 的两组
+resource 在六端都产出 `service.version`，异常样例的 `exception.type` / `exception.message` /
+`exception.stacktrace` 三键在六端完全一致。
 
 ### 10.2 已知跨语言差异（仅数字表示，语义等价）
 

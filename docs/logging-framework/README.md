@@ -1,6 +1,6 @@
 # 面向 Agent 的统一日志框架 · 通用接入规范（语言无关）
 
-> **状态（2026-11-08）**：**Schema v1.2.0 是当前统一范式**——`trace_id` 为 32 位小写 hex、`span_id` 为 16 位小写 hex，二者构成统一追踪模型；各端实现均已抽为独立仓库、以 submodule 挂入并通过测试：Web `logging-framework/web/Observability`（[`agent-log-web`](https://github.com/lovexiaov/agent-log-web)）、macOS `logging-framework/macos/AgentLog`（`agent-log-macos`）、Android `logging-framework/android/AgentLog`（[`agent-log-android`](https://github.com/lovexiaov/agent-log-android)）、Java `logging-framework/java/AgentLog`（[`agent-log-java`](https://github.com/lovexiaov/agent-log-java)）、Go `logging-framework/go/AgentLog`（[`agent-log-go`](https://github.com/lovexiaov/agent-log-go)）、Python `logging-framework/python/AgentLog`（[`agent-log-python`](https://github.com/lovexiaov/agent-log-python)）。
+> **状态（2026-11-10）**：**Schema v1.3.0 是当前统一范式**——在 v1.2 的统一追踪模型（`trace_id` 32 位小写 hex、`span_id` 16 位小写 hex）之上，新增可选顶层 `release` 并统一异常 payload 词表；纯增量、向后兼容（v1.2 行仍合法）。各端实现均已抽为独立仓库、以 submodule 挂入并通过测试：Web `logging-framework/web/Observability`（[`agent-log-web`](https://github.com/lovexiaov/agent-log-web)）、macOS `logging-framework/macos/AgentLog`（`agent-log-macos`）、Android `logging-framework/android/AgentLog`（[`agent-log-android`](https://github.com/lovexiaov/agent-log-android)）、Java `logging-framework/java/AgentLog`（[`agent-log-java`](https://github.com/lovexiaov/agent-log-java)）、Go `logging-framework/go/AgentLog`（[`agent-log-go`](https://github.com/lovexiaov/agent-log-go)）、Python `logging-framework/python/AgentLog`（[`agent-log-python`](https://github.com/lovexiaov/agent-log-python)）。
 > 平台专属实现与完整设计以子模块 `logging-framework/macos/AgentLog/Docs/macos-agent-logging-design.md` 为**真源**。
 > 本文件只沉淀**通用、语言无关**的约束，供所有端（Web / macOS / 服务端 / 其他）共同遵守。
 
@@ -38,6 +38,7 @@
 | `subsystem`  | ❌   | string | 子系统，通常为反向域名                       |
 | `category`   | ❌   | string | 业务分类                                     |
 | `env`        | ❌   | string | dev / staging / prod                         |
+| `release`    | ❌   | string | 发布标识（v1.3 新增）：semver / git sha / build number；≤128 字符、不校验格式，由配置在 emit 时统一盖章，缺省不写该键 |
 | `user_id`    | ❌   | string | 内部用户 id（禁止直接个人信息）              |
 | `payload`    | ❌   | object | 事件专属上下文（已脱敏）                     |
 
@@ -64,10 +65,12 @@
 | 会话     | `session_id`         | `extra.sessionId`    | `sessionId`          |
 | 追踪     | `trace_id`           | `extra.traceId`      | `traceId`            |
 | 跨度     | `span_id`            | `extra.spanId`       | `spanId`             |
+| 版本     | `release`            | `release`（配置项）  | `release`（配置项）  |
 | 自动埋点 | `agent_auto`         | `extra.agentAuto`    | `agentAuto`          |
 | 上下文   | `payload`            | 其余 `extra` 键      | `payload`            |
 
 > Java / Go / Python 端同样沿用「内部 camelCase → 序列化边界 snake_case」的映射，线格式与其他端逐字一致（字段名、6 档 level、封闭顶层）。
+> `release` 与其余字段不同：它**不是调用点参数**，而是配置项（`config.release` / `AgentLogConfig.release`），由 logger 在唯一写入入口统一盖章——保证每条事件（含自动埋点与崩溃）都带同一版本号，不依赖调用方自觉。
 
 ### 3.5 payload 标准词表
 
@@ -77,10 +80,23 @@
 | --- | --- | --- | --- |
 | `network_request` | `method` / `url` / `status_code` / `duration_ms` | string / string / int / int | HTTP 调用 |
 | `db_query` | `operation` / `statement` / `duration_ms` / `rows_affected` / `error` | string / string / int / int / string | 数据库调用；SQL 文本一律 `statement` |
-| `crash` / `hang` | `exception` / `stack` / `thread` | string / string / string | 崩溃/卡顿现场 |
+| `crash` / `hang` | `exception` / `exception_message` / `stack` / `mechanism` / `thread` | string / string / string / enum / string | 崩溃/卡顿现场；见下方异常词表 |
+| `ai_error` | `exception` / `exception_message` / `mechanism` / `provider` / `model` | string / string / enum / string / string | AI 调用失败 |
 | 任意 | `error` | string | 失败原因（成功时为空或省略） |
 
 - **写入端**只允许上表键名；`db_query` 的 SQL 文本一律写 `statement`，禁止写 `query` / `sql`。
+
+**异常词表（v1.3 统一口径）**：
+
+| 键 | 含义 | 取值约定 |
+| --- | --- | --- |
+| `exception` | 异常类型 | 尽量给「类型名」而非整段描述：`NSInvalidArgumentException` / `SIGSEGV` / `java.lang.NullPointerException` / `NullPointerException` / panic 值 |
+| `exception_message` | 异常消息 | 原始 message，已脱敏；与 `exception` 分工，不再塞进 `message` 字段 |
+| `stack` | 调用栈 | **单字符串**，保留原生格式（`\n` 分隔）；不结构化 frames（下游自行解析） |
+| `mechanism` | 采集方式 | `uncaught`（未捕获崩溃）/ `handled`（业务捕获后上报）/ `reported`（宿主显式上报） |
+
+- `message` 仍是**人可读摘要**（如 `Crash report available`），异常细节走 `exception*` 键；同一个值不要在两处重复写。
+- 端特有兜底键可与标准键共存，但**不得替代**标准键：macOS 保留 `raw`（KSCrash 原始报告）、Web 保留 `componentStack`、Python 保留 `thread` 扩展信息——标准键解析失败时仍靠这些兜底，事件绝不丢。
 
 ## 4. 已确认假设（通用部分）
 
@@ -111,6 +127,7 @@ Schema v1 是**事件源**格式，OTel/OTLP 是**传输与后端**标准，二�
 - 每条事件 → 一条 OTLP `LogRecord`；
 - `network_request` / `db_query` → 额外一条 `SPAN_KIND_CLIENT` Span（HTTP / Database 语义约定）；
 - `critical` → `FATAL`(21)；`payload.*` 展平为 `payload.<k>` 属性；
+- `release` → resource 的 `service.version`（v1.3）；异常 payload 的标准键 → `exception.type` / `exception.message` / `exception.stacktrace`；
 - `traceId`：**必须 32 位小写 hex**；非法/缺失值在写入边界**丢弃该字段**（事件照写），LogRecord 不带 `traceId`/`spanId`（绝不哈希派生，详见 `OTLP-MAPPING.md` §6）。`spanId`：事件自带合法 `span_id`（16 位 hex）原样透传；仅当该事件要发 span 且缺失时才确定性派生（种子含原始 `trace_id`，六端一致，不引入随机性）。
 
 已实现（**六端适配器齐全**）：

@@ -13,7 +13,8 @@
     "payload": {
       "order_id": "o_99",
       "amount": 12.5
-    }
+    },
+    "release": "2.3.1"
   },
   {
     "ts": "2026-11-02T13:37:22.000Z",
@@ -31,7 +32,8 @@
       "status_code": 200,
       "server_address": "api.x.com",
       "duration_ms": 42.5
-    }
+    },
+    "release": "2.3.1"
   },
   {
     "ts": "2026-11-02T13:37:23.500Z",
@@ -86,5 +88,24 @@
     "agent_auto": false,
     "message": "non-hex trace id must be dropped",
     "trace_id": "trace-abc-123"
+  },
+  {
+    "ts": "2026-11-02T13:37:26.500Z",
+    "level": "critical",
+    "service": "mac-app",
+    "subsystem": "agent.crash",
+    "category": "crash",
+    "event_type": "crash",
+    "session_id": "sess-0007",
+    "agent_auto": true,
+    "message": "uncaught exception in checkout flow",
+    "env": "prod",
+    "release": "2.3.1",
+    "payload": {
+      "exception": "NSInvalidArgumentException",
+      "exception_message": "unrecognized selector sent to instance",
+      "stack": "0   DemoApp   -[Cart total]\n1   libsystem_kernel.dylib   __pthread_kill",
+      "mechanism": "uncaught"
+    }
   }
 ]

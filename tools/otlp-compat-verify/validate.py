@@ -180,6 +180,8 @@ def to_resource(ev):
     res_attrs = [_attr("service.name", ev["service"])]
     if "env" in ev:
         res_attrs.append(_attr("deployment.environment", ev["env"]))
+    if "release" in ev:
+        res_attrs.append(_attr("service.version", ev["release"]))  # Schema v1.3
     res_attrs.append(_attr("session.id", ev["session_id"]))
     return {"attributes": res_attrs}
 
@@ -243,6 +245,10 @@ def checks_for(ev, name):
     if "user_id" in ev and "enduser.id" not in rec_keys:
         problems.append("user_id 未映射到 enduser.id")
 
+    # 4.8 release → resource service.version（Schema v1.3）
+    if "release" in ev and "service.version" not in res_keys:
+        problems.append("release 未映射到 service.version")
+
     return problems, env
 
 
@@ -270,6 +276,7 @@ SAMPLES = [
         "agent_auto": True,
         "message": "GET https://api.x.com/v1/user -> 200",
         "env": "prod",
+        "release": "1.4.2",
         "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736",
         "payload": {
             "method": "GET",

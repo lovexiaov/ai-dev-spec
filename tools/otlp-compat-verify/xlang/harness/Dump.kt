@@ -32,6 +32,7 @@ fun main(args: Array<String>) {
             agentAuto = m["agent_auto"] as? Boolean ?: false,
             message = str("message") ?: "",
             env = str("env"),
+            release = str("release"),
             userId = str("user_id"),
             payload = payload,
         )

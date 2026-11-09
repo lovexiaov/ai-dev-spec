@@ -31,6 +31,7 @@ let entries: [AgentLogEntry] = samples.map { map in
         agentAuto: map["agent_auto"] == .bool(true),
         message: text(map, "message") ?? "",
         env: text(map, "env"),
+        release: text(map, "release"),
         userId: text(map, "user_id"),
         payload: {
             if case .object(let p)? = map["payload"] { return p }
