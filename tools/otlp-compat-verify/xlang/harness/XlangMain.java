@@ -1,5 +1,5 @@
-import com.scaffold.agentlog.Json;
-import com.scaffold.agentlog.OtlpMapper;
+import cn.lovexiaov.agent.log.Json;
+import cn.lovexiaov.agent.log.OtlpMapper;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;

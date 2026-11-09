@@ -65,7 +65,6 @@ agent-log 与 OTel 不是竞争关系，而是**两层**：
 | `critical` | `FATAL` | 21 |
 
 - OTel 的 severity number 以 4 为步长留出细分空间，我们只使用规范值。
-- 读取端别名 `warning` 归一化为 `warn` 后映射（与 §3.2 of `README.md` 一致）。
 - 未知 level **降级为 INFO**，绝不让一次导出因为脏数据整体失败。
 
 ## 5. 值类型（protobuf JSON 映射）

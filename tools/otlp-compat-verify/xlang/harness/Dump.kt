@@ -2,11 +2,11 @@
 //
 // 用法：kotlinc -cp <agentlog-core.jar> Dump.kt -d dump.jar
 //       java -cp dump.jar:<agentlog-core.jar> DumpKt <samples.json> <logs.out> <traces.out>
-import com.scaffold.agentlog.Json
-import com.scaffold.agentlog.JsonValue
-import com.scaffold.agentlog.LogEvent
-import com.scaffold.agentlog.OtlpMapper
-import com.scaffold.agentlog.toJsonValue
+import cn.lovexiaov.agent.log.Json
+import cn.lovexiaov.agent.log.JsonValue
+import cn.lovexiaov.agent.log.LogEvent
+import cn.lovexiaov.agent.log.OtlpMapper
+import cn.lovexiaov.agent.log.toJsonValue
 import java.io.File
 
 @Suppress("UNCHECKED_CAST")
