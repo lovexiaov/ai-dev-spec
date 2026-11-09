@@ -14,7 +14,11 @@
 ## Current State（当前状态）
 
 - Branch: `main`（六子仓 + monorepo 均在 main，无 detached HEAD）
-- 进度：T1–T10 全部 `done`（证据见 `tasks.md`）；T11 已本地提交六子仓 + monorepo，待 CI 确认。
+- 进度：**T1–T11 全部 `done`**（证据见 `tasks.md`）。
+- 提交：python `df487fe` / go `d748460` / java `7a3f078` / android `fb5ce38` /
+  web `b83d123` / macos `08e4a27`；monorepo `dbd041c` + `4aad46d`。
+- CI：**7 仓全绿**（六子仓 push run success，已核对 headSha；monorepo `4aad46d` success）。
+  注意 macOS `InstrumentationTests` 在真实 KSCrash 下通过，说明 `standardPayload` 的取键路径成立。
 - 测试（本机实测）：
 
 | 端      | 命令                                                       | 结果                             |
@@ -100,13 +104,11 @@ python3 tools/otlp-compat-verify/validate.py                                    
 
 ## Next Steps（下一步）
 
-1. 推六子仓 → 观察各自 CI；再推 monorepo（pre-push 会跑 gate-runner 全量）→ 观察 CI。
-2. CI 若在 macOS `InstrumentationTests.testCrashReportRecorded` 上失败（真实 KSCrash 报告结构与
-   假设不符），按实际报告调整 `CrashReporter.standardPayload` 的取键路径；**不要为了让它过而弱化
-   断言**（`mechanism == reported`、`exception` 非空、`raw` 存在这三条是关键契约）。
-3. 发布决策（未做）：本轮未升 SDK 版本号，CHANGELOG 记在 `[Unreleased]`。若要发版，六端同步
-   `1.3.0` + 打 tag——注意 `telemetry.sdk.version` 六端必须一致，否则 `xlang_verify` 会报差异
-   （该键未在忽略列表里，只有 `telemetry.sdk.language` 被忽略）。
+1. **发布决策（未做，等产品判断）**：本轮未升 SDK 版本号，CHANGELOG 记在 `[Unreleased]`。
+   若要发版，六端同步 `1.3.0` + 打 tag——注意 `telemetry.sdk.version` 六端必须一致，否则
+   `xlang_verify` 会报差异（忽略列表里只有 `telemetry.sdk.language`）。
+2. 下游接入侧可选的后续工作（不在本 spec 范围）：按 `release` 做版本聚合看板、
+   从 `stack` 单字符串自行解析帧、基于 `crash` 事件做宿主侧落盘/重放。
 
 ## Blockers / Open Questions（阻塞与待解）
 

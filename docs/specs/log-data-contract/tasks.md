@@ -62,9 +62,16 @@
   - 判定：内容与实现一致 ✅
   - 顺手修正：`INTERFACE.md` 的 `templates/base` 副本原已落后一个版本（缺 v1.2 追踪模型段），已重新同步；Android / Web / macOS README 样例里的非法 `trace_id: "trace_abc"` 一并改成 32 位 hex
 
-- [ ] **T11** 提交：六子仓 commit（确认在 main）→ monorepo 指针同步 → CI
-  - 状态：in_progress | 证据：Not run
-  - 判定：7 仓 CI success
+- [x] **T11** 提交：六子仓 commit（确认在 main）→ monorepo 指针同步 → CI
+  - 状态：done | 证据：Verified
+  - 提交：python `df487fe` / go `d748460` / java `7a3f078` / android `fb5ce38` /
+    web `b83d123` / macos `08e4a27`；monorepo `dbd041c`（契约+文档+harness+指针）、
+    `4aad46d`（文档修正：Web 配置类型名）
+  - 本地门禁：`node tooling/gate-runner.mjs --stages typecheck,test` → ✅ 全部门禁通过
+    （root/ts、kotlin、go、java、python 五个模块；macOS 不在本地门禁内，由 CI 覆盖）
+  - CI：六子仓 push run 全部 `success`（已核对 headSha 与本地提交一致）；
+    monorepo `CI Gates` @ `4aad46d` = `success`
+  - 判定：7 仓 CI success ✅
 
 ## 完成标准
 
