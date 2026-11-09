@@ -13,7 +13,7 @@ agent-log 与 OTel 不是竞争关系，而是**两层**：
 - **agent-log**：跨端统一、Agent 优先、隐私默认安全的**事件源**，线格式是 Schema v1 JSONL（封闭顶层、6 档 level、`payload` 收敛）。
 - **OTel/OTLP**：观测数据的**传输/后端标准**。Collector 收到 OTLP 后可发往 Jaeger / Tempo / Loki / Grafana / Datadog 等。
 
-因此 OTLP 适配是**单向翻译层**（export-only）：不要求业务改用 OTel SDK，也不引入 OTel SDK/Collector 依赖。Schema v1.2 在 v1.1 借用 `span_id`（16 位小写 hex，与 W3C `traceparent` 的 span-id 同构）的基础上，进一步将 `trace_id` 收紧为 32 位小写 hex（与 OTLP `traceId` / W3C trace-id 同构）；二者均为固定长度 hex，id 策略统一见 §6。其余 OTel 概念（resource / scope / span kind 等）不进入线格式。
+因此 OTLP 适配是**单向翻译层**（export-only）：不要求业务改用 OTel SDK，也不引入 OTel SDK/Collector 依赖。统一追踪模型中，`trace_id` 为 32 位小写 hex（与 OTLP `traceId` / W3C `traceparent` 的 trace-id 同构），`span_id` 为 16 位小写 hex（与 W3C `traceparent` 的 span-id 同构）；二者均为固定长度 hex，id 策略统一见 §6。其余 OTel 概念（resource / scope / span kind 等）不进入线格式。
 
 ## 2. 总原则
 
@@ -22,7 +22,7 @@ agent-log 与 OTel 不是竞争关系，而是**两层**：
    - `network_request` → `SPAN_KIND_CLIENT`，套 HTTP 语义约定；
    - `db_query` → `SPAN_KIND_CLIENT`，套 Database 语义约定。
 3. **其余事件不发 span**：`log` / `ui_interaction` / `screen_view` 不是"调用跨度"，`crash` / `hang` 留在 logs 信号（附 `exception.*` 属性）。
-4. **id 优先透传、span 缺失才派生**（见 §6）：`trace_id` 与 `span_id` 合法即透传（v1.2 起均为固定长度 hex）；仅 span 缺失 `span_id` 时确定性派生，保证同一事件重复导出得到同一 `spanId`，重试与重放幂等。
+4. **id 优先透传、span 缺失才派生**（见 §6）：`trace_id` 与 `span_id` 合法即透传（均为固定长度 hex）；仅 span 缺失 `span_id` 时确定性派生，保证同一事件重复导出得到同一 `spanId`，重试与重放幂等。
 5. **OTLP 是传输格式，不是存储格式**：`payload` 展平后作为属性发送，不做二次脱敏——脱敏已在 logger 层完成（C6）。
 
 ## 3. 事件 → LogRecord
@@ -42,7 +42,7 @@ agent-log 与 OTel 不是竞争关系，而是**两层**：
 | `category` | attribute `agent.category` | 同上 |
 | `user_id` | attribute `enduser.id` | 语义约定中的间接标识 |
 | `payload.<k>` | attribute `payload.<k>` | 逐键展平，类型见 §5 |
-| `span_id` | `spanId` | Schema v1.1 可选字段；合法（16 位小写 hex）时原样透传，缺失才派生（§6）；无 `trace_id` 时不写入 |
+| `span_id` | `spanId` | 统一追踪模型的操作跨度标识；合法（16 位小写 hex）时原样透传，缺失才派生（§6）；无 `trace_id` 时不写入 |
 | （派生） | `spanId` | 仅当该事件同时产出 span 且未自带 `span_id` 时派生（§7） |
 
 补充：`crash` / `hang` 额外从 `payload` 提取
@@ -85,13 +85,13 @@ agent-log 与 OTel 不是竞争关系，而是**两层**：
 
 ## 6. id 规则（确定性）
 
-Schema v1.2 起 `trace_id` 收紧为 **32 位小写 hex**（8 字节，与 OTLP `traceId` / W3C `traceparent` 的 trace-id 同构），`span_id` 为 16 位小写 hex（8 字节）。两者策略一致：**合法值透传（大写归一为小写），非法值在写入边界丢弃（事件照写）—— 适配器绝不变形、绝不派生用户 id**：
+统一追踪模型中，`trace_id` 为 **32 位小写 hex**（8 字节，与 OTLP `traceId` / W3C `traceparent` 的 trace-id 同构），`span_id` 为 16 位小写 hex（8 字节）。两者策略一致：**合法值透传（大写归一为小写），非法值在写入边界丢弃（事件照写）—— 适配器绝不变形、绝不派生用户 id**：
 
 | 场景 | 规则 |
 | --- | --- |
-| 事件自带合法 `trace_id`（v1.2） | 原样透传（大写归一为小写）——日志、OTLP、Jaeger 三处同一个值 |
+| 事件自带合法 `trace_id` | 原样透传（大写归一为小写）——日志、OTLP、Jaeger 三处同一个值 |
 | `trace_id` 非法或缺失 | 写入边界丢弃该字段，事件本身照写；LogRecord 不带 `traceId`/`spanId` |
-| 事件自带合法 `span_id`（v1.1） | 原样透传；LogRecord 与 span 共用该 id |
+| 事件自带合法 `span_id` | 原样透传；LogRecord 与 span 共用该 id |
 | `span_id` 缺失或非法（仅当该事件要发 span） | `sha256("agentlog:span:" + session_id + trace_id + event_type + ts + message)[:16]` 确定性派生 |
 | 无 trace 的事件要发 span | 用 `sha256("agentlog:session:" + session_id)[:32]` 作为该会话的合成 trace |
 
@@ -130,9 +130,7 @@ Schema v1.2 起 `trace_id` 收紧为 **32 位小写 hex**（8 字节，与 OTLP 
 - 时间窗同 7.1（`duration_ms`）
 - 属性：`db.system`（`db_system`/`system`）、`db.operation`（`operation`/`op`）、`db.statement`（**规范键 `statement`**）、失败时 `error.type`。
 
-> **payload 词表（v1.1 起统一）**：`db_query` 的 SQL 文本在六端一律写入 **`statement`**。
-> 历史数据里 Go 的 `query`、Java 的 `sql` 仍出现在旧 JSONL 中，适配器**只在读取侧**兼容（优先级 `statement > sql > query`），
-> 写入侧禁止再产出 `query`/`sql`。详见 `README.md` §3.5「payload 标准词表」。
+> **payload 词表**：`db_query` 的 SQL 文本在六端一律写入 **`statement`**，禁止写 `query` / `sql`。详见 `README.md` §3.5「payload 标准词表」。
 
 ## 8. Resource 与批次组织
 
@@ -177,16 +175,14 @@ Schema v1.2 起 `trace_id` 收紧为 **32 位小写 hex**（8 字节，与 OTLP 
 
 | 端 | 状态 | 入口 |
 | --- | --- | --- |
-| Python | ✅ 适配器 + ✅ exporter（v1.2.0；Schema v1.2 `trace_id` + v1.1 `span_id` 边界校验、`new_trace_id()`） | `agentlog/otlp.py`：`to_otlp` / `to_otlp_logs` / `to_otlp_spans` / `event_to_log_record` / `event_to_span` / `OTLPSink`；`agentlog/otlp_http.py`：`OTLPExporter` |
+| Python | ✅ 适配器 + ✅ exporter（v1.2.0；统一追踪模型边界校验、`new_trace_id()`） | `agentlog/otlp.py`：`to_otlp` / `to_otlp_logs` / `to_otlp_spans` / `event_to_log_record` / `event_to_span` / `OTLPSink`；`agentlog/otlp_http.py`：`OTLPExporter` |
 | Go | ✅ 适配器 + ✅ exporter（v1.2.0；`NormalizeTraceID` / `NewTraceID`） | `agentlog/otlp.go`：`ToOTLP` / `ToOTLPLogs` / `ToOTLPSpans` / `EventToLogRecord` / `EventToSpan` / `OTLPSink`；`agentlog/otlp_http.go`：`OTLPExporter` |
 | Java | ✅ 适配器（v1.2.0；零第三方依赖，仅 `java.base`；`CoreTypes.TraceId`） | `OtlpMapper`：`toOtlp` / `toOtlpLogs` / `toOtlpSpans` / `eventToLogRecord` / `eventToSpan` / 内嵌 `OtlpSink implements LogSink` |
 | Web / TS | ✅ 适配器（v1.2.0；浏览器可用：同步 SHA-256 自实现、纳秒走 BigInt；`normalizeTraceId` / `newTraceId`） | `src/otlp.ts`：`toOtlp` / `toOtlpLogs` / `toOtlpSpans` / `eventToLogRecord` / `eventToSpan` / `createOtlpSink`；`src/ids.ts`、`src/trace.ts` |
 | Kotlin / Android | ✅ 适配器（v1.2.0；复用包内 `Json` 树，零第三方依赖；`TraceId` object） | `OtlpMapper`（`object`）：`toOtlp` / `toOtlpLogs` / `toOtlpSpans` / `eventToLogRecord` / `eventToSpan` / 内嵌 `OtlpSink : LogSink` |
 | Swift / macOS | ✅ 适配器（v1.2.0；只依赖 Foundation + CryptoKit；`TraceIdentifier`） | `OtlpMapper`：`toOtlp` / `toOtlpLogs` / `toOtlpSpans` / `logRecord(for:)` / `span(for:)` / `json(_:)`；`AgentLogExporter.otlpBatch(extraResource:)` |
 
-> 表内状态只针对 **OTLP 适配器/exporter**。Schema v1.2（`trace_id` 收紧 32-hex）与 v1.1
-> （`span_id`）的**边界校验**六端已全部落地（各有 `normalize` + 序列化边界丢弃非法值的实现，
-> session id 默认值均为 32-hex，各端提供 `newTraceId()` 类便利函数）。
+> 表内状态只针对 **OTLP 适配器/exporter**。统一追踪模型的**边界校验**六端已全部落地：各有 `normalize` + 序列化边界丢弃非法值的实现，session id 默认值均为 32-hex，各端提供 `newTraceId()` 类便利函数。
 >
 > **HTTP exporter 目前仅 Python / Go 两端有**；其余四端只有适配器（结构转换是纯函数，
 > 传输交回宿主平台：Java 用 `HttpClient`、Kotlin 用 `OkHttp`、Web 用 `fetch`、Swift 用 `URLSession`，
@@ -245,4 +241,4 @@ python3 tools/otlp-compat-verify/xlang_verify.py --only java,go
 1. **semconv 版本漂移**：部分属性（如 `db.*`、`http.request.method`）在 OTel 规范中仍标 Experimental。各端实现必须把 semconv 键收敛在一处常量，便于随版本升级。
 2. **`payload` 无白名单**：OTLP 属性数量无硬上限但后端有（如 Datadog 对属性数/长度有限制）。大 payload 建议在 Collector 侧做 `attributes/delete` 或采样。
 3. **高基数字段**：`payload.url` 含动态 id 时会把 `url.full` 变成高基数；如需聚合，应在 Collector 侧改为 `http.route` 模板。
-4. **`trace_id` 不派生**：v1.2 起非法/缺失 `trace_id` 在写入边界直接丢弃（事件照写），绝不做哈希变形；`agent.trace.raw` 补偿属性已随哈希方案取消。跨系统串联的上游非 hex id 映射是业务决策，应在系统边界（网关 / 入口服务）显式完成，不由日志库偷偷处理（假关联无法与上游真实链路对上）。
+4. **`trace_id` 不派生**：非法/缺失 `trace_id` 在写入边界直接丢弃（事件照写），绝不做哈希变形。跨系统串联的上游非 hex id 映射是业务决策，应在系统边界（网关 / 入口服务）显式完成，不由日志库偷偷处理（假关联无法与上游真实链路对上）。

@@ -1,6 +1,6 @@
 # 面向 Agent 的统一日志框架 · 通用接入规范（语言无关）
 
-> **状态（2026-11-08）**：**Schema v1.2.0 已发布**（破坏性收紧 `trace_id` 为 32 位 hex；v1.1 引入的可选 `span_id` 保留），各端实现均已抽为独立仓库、以 submodule 挂入并通过测试：Web `logging-framework/web/Observability`（[`agent-log-web`](https://github.com/lovexiaov/agent-log-web)）、macOS `logging-framework/macos/AgentLog`（`agent-log-macos`）、Android `logging-framework/android/AgentLog`（[`agent-log-android`](https://github.com/lovexiaov/agent-log-android)）、Java `logging-framework/java/AgentLog`（[`agent-log-java`](https://github.com/lovexiaov/agent-log-java)）、Go `logging-framework/go/AgentLog`（[`agent-log-go`](https://github.com/lovexiaov/agent-log-go)）、Python `logging-framework/python/AgentLog`（[`agent-log-python`](https://github.com/lovexiaov/agent-log-python)）。
+> **状态（2026-11-08）**：**Schema v1.2.0 是当前统一范式**——`trace_id` 为 32 位小写 hex、`span_id` 为 16 位小写 hex，二者构成统一追踪模型；各端实现均已抽为独立仓库、以 submodule 挂入并通过测试：Web `logging-framework/web/Observability`（[`agent-log-web`](https://github.com/lovexiaov/agent-log-web)）、macOS `logging-framework/macos/AgentLog`（`agent-log-macos`）、Android `logging-framework/android/AgentLog`（[`agent-log-android`](https://github.com/lovexiaov/agent-log-android)）、Java `logging-framework/java/AgentLog`（[`agent-log-java`](https://github.com/lovexiaov/agent-log-java)）、Go `logging-framework/go/AgentLog`（[`agent-log-go`](https://github.com/lovexiaov/agent-log-go)）、Python `logging-framework/python/AgentLog`（[`agent-log-python`](https://github.com/lovexiaov/agent-log-python)）。
 > 平台专属实现与完整设计以子模块 `logging-framework/macos/AgentLog/Docs/macos-agent-logging-design.md` 为**真源**。
 > 本文件只沉淀**通用、语言无关**的约束，供所有端（Web / macOS / 服务端 / 其他）共同遵守。
 
@@ -33,8 +33,8 @@
 | `session_id` | ✅   | string | 一次运行 / 会话标识                          |
 | `agent_auto` | ✅   | bool   | `true` = 框架自动埋点                        |
 | `message`    | ✅   | string | 人可读摘要（已脱敏）                         |
-| `trace_id`   | ❌   | string | 跨端追踪串联，与 `traceparent` 同源（v1.2 收紧：32 位小写 hex；非法值在写入边界丢弃，事件照写） |
-| `span_id`    | ❌   | string | 操作跨度标识（v1.1）：16 位小写 hex（8 字节），与 `trace_id` 配合 |
+| `trace_id`   | ❌   | string | 跨端追踪串联，与 `traceparent` 同源；**必须 32 位小写 hex**，非法值在写入边界丢弃（事件照写），绝不做哈希派生 |
+| `span_id`    | ❌   | string | 操作跨度标识（一次 HTTP 调用 / 一次 DB 查询等）：16 位小写 hex（8 字节），与 `trace_id` 共同构成统一追踪模型；可省略，省略时由导出端确定性派生（见 `OTLP-MAPPING.md` §6） |
 | `subsystem`  | ❌   | string | 子系统，通常为反向域名                       |
 | `category`   | ❌   | string | 业务分类                                     |
 | `env`        | ❌   | string | dev / staging / prod                         |
@@ -45,15 +45,13 @@
 
 `trace` < `debug` < `info` < `warn` < `error` < `critical`
 
-- 写入端只允许这 6 个值，**必须写 `warn`**。
-- `warning` 仅为**读取端兼容别名**（历史日志 / syslog 习惯），聚合器读到需归一化为 `warn`；写入端禁止产出。
+- 写入端只允许这 6 个值，**必须写 `warn`**（不允许 `warning` 等变体）。
 
 ### 3.3 扩展规则
 
 - 顶层字段集**封闭**（schema 中 `additionalProperties: false`）。新增字段 = 升 schema 版本，禁止各端私加。
 - 业务自定义字段一律进 `payload`，键名 snake_case。
-- **v1.1（2026-11-07，向后兼容增量）**：新增可选顶层字段 `span_id`。`required` 不变，不写该字段的日志在 v1.0 与 v1.1 下都合法；写了该字段的日志需要 v1.1 及以上的校验器（严格按 v1.0 schema 校验会因未知字段被拒）。六端的 schema 副本与 C7 允许集已同步到 v1.1。
-- **v1.2.0（2026-11-08，破坏性）**：`trace_id` 收紧为 **32 位小写十六进制**（8 字节，与 OTLP `traceId` / W3C `traceparent` 的 trace-id 同构）。非法值（大写以外的字符、长度不符等）在写入边界**丢弃该字段**，事件本身照写（视同未提供 trace）；**不再做任何哈希派生**。这是与 v1.1 不兼容的破坏性变更——按 v1.1 及更早 schema 严格校验会拒绝旧格式 `trace_id`。六端 Schema 副本、边界 `normalize` 与 `newTraceId()` 已同步到 v1.2.0（详见 `OTLP-MAPPING.md` §6）。
+- **统一追踪模型**：`trace_id`（32 位小写 hex）串联一次请求链路，`span_id`（16 位小写 hex）标识其中的一次操作。非法 / 缺失的 `trace_id` 在写入边界**丢弃该字段、事件照写**，绝不做哈希派生；缺失的 `span_id` 由导出端确定性派生（六端一致、幂等）。各端提供 `newTraceId()`；session id 默认值同为 32 位 hex，故 `trace_id = session_id` 这一最自然的绑定永远合法（详见 `OTLP-MAPPING.md` §6）。
 
 ### 3.4 内部命名 ↔ 线格式映射
 
@@ -71,7 +69,7 @@
 
 > Java / Go / Python 端同样沿用「内部 camelCase → 序列化边界 snake_case」的映射，线格式与其他端逐字一致（字段名、6 档 level、封闭顶层）。
 
-### 3.5 payload 标准词表（v1.1）
+### 3.5 payload 标准词表
 
 `payload` 的键属于业务自定义范围，但**同一语义在六端必须同一个键名**（C2 的延伸）。已知会被 Agent 与导出适配器消费的语义，统一如下：
 
@@ -82,8 +80,7 @@
 | `crash` / `hang` | `exception` / `stack` / `thread` | string / string / string | 崩溃/卡顿现场 |
 | 任意 | `error` | string | 失败原因（成功时为空或省略） |
 
-- **写入端**只允许上表键名；`db_query` 禁止再写 `query` / `sql`（v1.1 前 Go/Java 的历史写法）。
-- **读取端**（Agent、OTLP 适配器）可对历史数据做兼容：`statement > sql > query`，仅此一处允许别名。
+- **写入端**只允许上表键名；`db_query` 的 SQL 文本一律写 `statement`，禁止写 `query` / `sql`。
 
 ## 4. 已确认假设（通用部分）
 
@@ -114,7 +111,7 @@ Schema v1 是**事件源**格式，OTel/OTLP 是**传输与后端**标准，二�
 - 每条事件 → 一条 OTLP `LogRecord`；
 - `network_request` / `db_query` → 额外一条 `SPAN_KIND_CLIENT` Span（HTTP / Database 语义约定）；
 - `critical` → `FATAL`(21)；`payload.*` 展平为 `payload.<k>` 属性；
-- `traceId`：**32 位 hex 强制（v1.2）**；非法/缺失值在写入边界**丢弃该字段**（事件照写），LogRecord 不带 `traceId`/`spanId`（绝不哈希派生，详见 `OTLP-MAPPING.md` §6）。`spanId`：事件自带合法 `span_id`（v1.1，16 位 hex）原样透传；仅当该事件要发 span 且缺失时才确定性派生（种子含原始 `trace_id`，六端一致，不引入随机性）。
+- `traceId`：**必须 32 位小写 hex**；非法/缺失值在写入边界**丢弃该字段**（事件照写），LogRecord 不带 `traceId`/`spanId`（绝不哈希派生，详见 `OTLP-MAPPING.md` §6）。`spanId`：事件自带合法 `span_id`（16 位 hex）原样透传；仅当该事件要发 span 且缺失时才确定性派生（种子含原始 `trace_id`，六端一致，不引入随机性）。
 
 已实现（**六端适配器齐全**）：
 
