@@ -31,7 +31,7 @@
 
 ### 4.1 `release`（顶层可选字段）
 
-- **来源**：配置项（`config.release` / `AgentLogConfig(release:)` / `EncodingConfig.release`），**不是**每次调用的参数。
+- **来源**：配置项（`config.release` / `AgentLogConfig(release:)` / `LoggerOptions.release`），**不是**每次调用的参数。
 - **盖章位置**：logger 的唯一写入入口（`record()` / `emit()` 组装事件时从配置取）。`child()` 必须继承；自动埋点事件走同一路径；由采集点直接构造事件的分支（如崩溃）MUST 显式透传。
 - **校验**：不校验格式（semver / git sha / build number 均可），仅要求**非空且 ≤128 字符**；不满足则视同未配置、**不写该键**（绝不写出 schema 违规行）。
 - **缺省**：未配置时不写该键，因此 v1.2 的产出形态保持合法。
