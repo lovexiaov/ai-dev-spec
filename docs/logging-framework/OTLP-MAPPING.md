@@ -1,6 +1,6 @@
 # agent-log → OpenTelemetry (OTLP) 映射规范
 
-> **状态（2026-11-07）**：D3「OTel 对齐」规范真源。适配器 + 内置 exporter 已在
+> **状态（2026-11-08，Schema v1.2.0）**：D3「OTel 对齐」规范真源。适配器 + 内置 exporter 已在
 > Python（`logging-framework/python/AgentLog/agentlog/otlp.py`、`otlp_http.py`）与
 > Go（`logging-framework/go/AgentLog/agentlog/otlp.go`、`otlp_http.go`）落地，
 > 其余端待跟进；两端产出的 body 已逐字对齐（见 §9.3）。
@@ -13,7 +13,7 @@ agent-log 与 OTel 不是竞争关系，而是**两层**：
 - **agent-log**：跨端统一、Agent 优先、隐私默认安全的**事件源**，线格式是 Schema v1 JSONL（封闭顶层、6 档 level、`payload` 收敛）。
 - **OTel/OTLP**：观测数据的**传输/后端标准**。Collector 收到 OTLP 后可发往 Jaeger / Tempo / Loki / Grafana / Datadog 等。
 
-因此 OTLP 适配是**单向翻译层**（export-only）：不要求业务改用 OTel SDK，也不引入 OTel SDK/Collector 依赖。Schema v1.1 仅从 OTel 借用 `span_id` 这**一个标识符字段**（16 位小写 hex，与 W3C `traceparent` 的 span-id 同构），目的是让日志行与链路节点能精确对齐；其余 OTel 概念（resource / scope / span kind 等）不进入线格式。
+因此 OTLP 适配是**单向翻译层**（export-only）：不要求业务改用 OTel SDK，也不引入 OTel SDK/Collector 依赖。Schema v1.2 在 v1.1 借用 `span_id`（16 位小写 hex，与 W3C `traceparent` 的 span-id 同构）的基础上，进一步将 `trace_id` 收紧为 32 位小写 hex（与 OTLP `traceId` / W3C trace-id 同构）；二者均为固定长度 hex，id 策略统一见 §6。其余 OTel 概念（resource / scope / span kind 等）不进入线格式。
 
 ## 2. 总原则
 
@@ -177,12 +177,12 @@ Schema v1.2 起 `trace_id` 收紧为 **32 位小写 hex**（8 字节，与 OTLP 
 
 | 端 | 状态 | 入口 |
 | --- | --- | --- |
-| Python | ✅ 适配器 + ✅ exporter（v1.0.0；Schema v1.2 `trace_id` + v1.1 `span_id` 边界校验、`new_trace_id()`） | `agentlog/otlp.py`：`to_otlp` / `to_otlp_logs` / `to_otlp_spans` / `event_to_log_record` / `event_to_span` / `OTLPSink`；`agentlog/otlp_http.py`：`OTLPExporter` |
-| Go | ✅ 适配器 + ✅ exporter（v1.0.0；`NormalizeTraceID` / `NewTraceID`） | `agentlog/otlp.go`：`ToOTLP` / `ToOTLPLogs` / `ToOTLPSpans` / `EventToLogRecord` / `EventToSpan` / `OTLPSink`；`agentlog/otlp_http.go`：`OTLPExporter` |
-| Java | ✅ 适配器（v1.0.0；零第三方依赖，仅 `java.base`；`CoreTypes.TraceId`） | `OtlpMapper`：`toOtlp` / `toOtlpLogs` / `toOtlpSpans` / `eventToLogRecord` / `eventToSpan` / 内嵌 `OtlpSink implements LogSink` |
-| Web / TS | ✅ 适配器（v1.0.0；浏览器可用：同步 SHA-256 自实现、纳秒走 BigInt；`normalizeTraceId` / `newTraceId`） | `src/otlp.ts`：`toOtlp` / `toOtlpLogs` / `toOtlpSpans` / `eventToLogRecord` / `eventToSpan` / `createOtlpSink`；`src/ids.ts`、`src/trace.ts` |
-| Kotlin / Android | ✅ 适配器（v1.0.0；复用包内 `Json` 树，零第三方依赖；`TraceId` object） | `OtlpMapper`（`object`）：`toOtlp` / `toOtlpLogs` / `toOtlpSpans` / `eventToLogRecord` / `eventToSpan` / 内嵌 `OtlpSink : LogSink` |
-| Swift / macOS | ✅ 适配器（v1.0.0；只依赖 Foundation + CryptoKit；`TraceIdentifier`） | `OtlpMapper`：`toOtlp` / `toOtlpLogs` / `toOtlpSpans` / `logRecord(for:)` / `span(for:)` / `json(_:)`；`AgentLogExporter.otlpBatch(extraResource:)` |
+| Python | ✅ 适配器 + ✅ exporter（v1.2.0；Schema v1.2 `trace_id` + v1.1 `span_id` 边界校验、`new_trace_id()`） | `agentlog/otlp.py`：`to_otlp` / `to_otlp_logs` / `to_otlp_spans` / `event_to_log_record` / `event_to_span` / `OTLPSink`；`agentlog/otlp_http.py`：`OTLPExporter` |
+| Go | ✅ 适配器 + ✅ exporter（v1.2.0；`NormalizeTraceID` / `NewTraceID`） | `agentlog/otlp.go`：`ToOTLP` / `ToOTLPLogs` / `ToOTLPSpans` / `EventToLogRecord` / `EventToSpan` / `OTLPSink`；`agentlog/otlp_http.go`：`OTLPExporter` |
+| Java | ✅ 适配器（v1.2.0；零第三方依赖，仅 `java.base`；`CoreTypes.TraceId`） | `OtlpMapper`：`toOtlp` / `toOtlpLogs` / `toOtlpSpans` / `eventToLogRecord` / `eventToSpan` / 内嵌 `OtlpSink implements LogSink` |
+| Web / TS | ✅ 适配器（v1.2.0；浏览器可用：同步 SHA-256 自实现、纳秒走 BigInt；`normalizeTraceId` / `newTraceId`） | `src/otlp.ts`：`toOtlp` / `toOtlpLogs` / `toOtlpSpans` / `eventToLogRecord` / `eventToSpan` / `createOtlpSink`；`src/ids.ts`、`src/trace.ts` |
+| Kotlin / Android | ✅ 适配器（v1.2.0；复用包内 `Json` 树，零第三方依赖；`TraceId` object） | `OtlpMapper`（`object`）：`toOtlp` / `toOtlpLogs` / `toOtlpSpans` / `eventToLogRecord` / `eventToSpan` / 内嵌 `OtlpSink : LogSink` |
+| Swift / macOS | ✅ 适配器（v1.2.0；只依赖 Foundation + CryptoKit；`TraceIdentifier`） | `OtlpMapper`：`toOtlp` / `toOtlpLogs` / `toOtlpSpans` / `logRecord(for:)` / `span(for:)` / `json(_:)`；`AgentLogExporter.otlpBatch(extraResource:)` |
 
 > 表内状态只针对 **OTLP 适配器/exporter**。Schema v1.2（`trace_id` 收紧 32-hex）与 v1.1
 > （`span_id`）的**边界校验**六端已全部落地（各有 `normalize` + 序列化边界丢弃非法值的实现，
@@ -245,4 +245,4 @@ python3 tools/otlp-compat-verify/xlang_verify.py --only java,go
 1. **semconv 版本漂移**：部分属性（如 `db.*`、`http.request.method`）在 OTel 规范中仍标 Experimental。各端实现必须把 semconv 键收敛在一处常量，便于随版本升级。
 2. **`payload` 无白名单**：OTLP 属性数量无硬上限但后端有（如 Datadog 对属性数/长度有限制）。大 payload 建议在 Collector 侧做 `attributes/delete` 或采样。
 3. **高基数字段**：`payload.url` 含动态 id 时会把 `url.full` 变成高基数；如需聚合，应在 Collector 侧改为 `http.route` 模板。
-4. **id 派生不可逆**：非 hex 的 `trace_id` 经哈希后与原值不可互相推导，跨系统串联时需保留原始 `payload` 或 `agent.trace.raw` 属性（当前未实现，待评估）。
+4. **`trace_id` 不派生**：v1.2 起非法/缺失 `trace_id` 在写入边界直接丢弃（事件照写），绝不做哈希变形；`agent.trace.raw` 补偿属性已随哈希方案取消。跨系统串联的上游非 hex id 映射是业务决策，应在系统边界（网关 / 入口服务）显式完成，不由日志库偷偷处理（假关联无法与上游真实链路对上）。

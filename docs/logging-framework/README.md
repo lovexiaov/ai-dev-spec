@@ -1,6 +1,6 @@
 # 面向 Agent 的统一日志框架 · 通用接入规范（语言无关）
 
-> **状态（2026-11-07）**：**Schema v1.1 已冻结**（相对 v1.0 为向后兼容增量：新增可选顶层 `span_id`），各端实现均已抽为独立仓库、以 submodule 挂入并通过测试：Web `logging-framework/web/Observability`（[`agent-log-web`](https://github.com/lovexiaov/agent-log-web)）、macOS `logging-framework/macos/AgentLog`（`agent-log-macos`）、Android `logging-framework/android/AgentLog`（[`agent-log-android`](https://github.com/lovexiaov/agent-log-android)）、Java `logging-framework/java/AgentLog`（[`agent-log-java`](https://github.com/lovexiaov/agent-log-java)）、Go `logging-framework/go/AgentLog`（[`agent-log-go`](https://github.com/lovexiaov/agent-log-go)）、Python `logging-framework/python/AgentLog`（[`agent-log-python`](https://github.com/lovexiaov/agent-log-python)）。
+> **状态（2026-11-08）**：**Schema v1.2.0 已发布**（破坏性收紧 `trace_id` 为 32 位 hex；v1.1 引入的可选 `span_id` 保留），各端实现均已抽为独立仓库、以 submodule 挂入并通过测试：Web `logging-framework/web/Observability`（[`agent-log-web`](https://github.com/lovexiaov/agent-log-web)）、macOS `logging-framework/macos/AgentLog`（`agent-log-macos`）、Android `logging-framework/android/AgentLog`（[`agent-log-android`](https://github.com/lovexiaov/agent-log-android)）、Java `logging-framework/java/AgentLog`（[`agent-log-java`](https://github.com/lovexiaov/agent-log-java)）、Go `logging-framework/go/AgentLog`（[`agent-log-go`](https://github.com/lovexiaov/agent-log-go)）、Python `logging-framework/python/AgentLog`（[`agent-log-python`](https://github.com/lovexiaov/agent-log-python)）。
 > 平台专属实现与完整设计以子模块 `logging-framework/macos/AgentLog/Docs/macos-agent-logging-design.md` 为**真源**。
 > 本文件只沉淀**通用、语言无关**的约束，供所有端（Web / macOS / 服务端 / 其他）共同遵守。
 
@@ -14,7 +14,7 @@
 - **C2 线格式唯一，命名不留方言**：字段名在所有端**逐字相同**（snake_case）。语言内部命名（TS `camelCase`、Swift 属性名）可自由，但**只在序列化边界做映射**，不得把内部命名漏到线上。历史上 `event ↔ event_type`、`timestamp ↔ ts` 这类"对应关系"已废止——不存在别名，只有同一个字段名。
 - **C3 本地优先 & 易导出**：本地持久化 + 一键导出 JSONL；Agent 可直接消费；默认不引入后端/云端依赖（轻量优先）。
 - **C4 业务零改造接入**：薄封装统一 API，一处初始化；自动埋点默认全开，业务侧不写任何埋点代码。
-- **C5 自动埋点默认全开（可关闭）**：覆盖 UI 交互/页面浏览、网络请求、崩溃/未捕获异常、性能/卡顿四类信号；自动事件统一标记 `agent_auto: true` 与明确 `event_type`，Agent 可一键筛选"机器视角时间线"。
+- **C5 自动埋点默认全开（可关闭）**：覆盖 UI 交互/页面浏览、网络请求、崩溃/未捕获异常、性能/卡顿四类信号；自动事件统一标记 `agent_auto: true` 与明确 `event_type`，Agent 可一键筛选"机器视角时间线"。各端落地程度不同：macOS / Android / Web 在 bootstrap 后零代码即生效；Go（`WrapDB` / `InstallPanicHandler`）、Python（`instrument_requests` / `install_crash_handler`）需显式调用一次以接线，之后自动记录。
 - **C6 强制脱敏**：在 logger 层（而非调用方）强制脱敏；默认脱敏键 `password / token / authorization / cookie / secret`（各端可加不可减，需覆盖 `api_key`、`access_token` 等带分隔符变体）；网络默认只记 `host/path/status/耗时/error`，不记 query 敏感参数与 body。
 - **C7 验收门槛**：日志必须可被 Agent 程序化消费（结构化、机器可读、可按 `event_type` 过滤），并纳入 spec 验收条件。**两端必须各有一条测试断言输出字段集与 schema 一致**，否则规范会随时间腐化。
 
@@ -33,7 +33,7 @@
 | `session_id` | ✅   | string | 一次运行 / 会话标识                          |
 | `agent_auto` | ✅   | bool   | `true` = 框架自动埋点                        |
 | `message`    | ✅   | string | 人可读摘要（已脱敏）                         |
-| `trace_id`   | ❌   | string | 跨端追踪串联，与 `traceparent` 同源          |
+| `trace_id`   | ❌   | string | 跨端追踪串联，与 `traceparent` 同源（v1.2 收紧：32 位小写 hex；非法值在写入边界丢弃，事件照写） |
 | `span_id`    | ❌   | string | 操作跨度标识（v1.1）：16 位小写 hex（8 字节），与 `trace_id` 配合 |
 | `subsystem`  | ❌   | string | 子系统，通常为反向域名                       |
 | `category`   | ❌   | string | 业务分类                                     |
@@ -53,6 +53,7 @@
 - 顶层字段集**封闭**（schema 中 `additionalProperties: false`）。新增字段 = 升 schema 版本，禁止各端私加。
 - 业务自定义字段一律进 `payload`，键名 snake_case。
 - **v1.1（2026-11-07，向后兼容增量）**：新增可选顶层字段 `span_id`。`required` 不变，不写该字段的日志在 v1.0 与 v1.1 下都合法；写了该字段的日志需要 v1.1 及以上的校验器（严格按 v1.0 schema 校验会因未知字段被拒）。六端的 schema 副本与 C7 允许集已同步到 v1.1。
+- **v1.2.0（2026-11-08，破坏性）**：`trace_id` 收紧为 **32 位小写十六进制**（8 字节，与 OTLP `traceId` / W3C `traceparent` 的 trace-id 同构）。非法值（大写以外的字符、长度不符等）在写入边界**丢弃该字段**，事件本身照写（视同未提供 trace）；**不再做任何哈希派生**。这是与 v1.1 不兼容的破坏性变更——按 v1.1 及更早 schema 严格校验会拒绝旧格式 `trace_id`。六端 Schema 副本、边界 `normalize` 与 `newTraceId()` 已同步到 v1.2.0（详见 `OTLP-MAPPING.md` §6）。
 
 ### 3.4 内部命名 ↔ 线格式映射
 
@@ -92,12 +93,12 @@
 
 ## 5. 平台专属实现归属（真源在外仓）
 
-- **macOS（原生 AppKit）**：完整设计与可运行代码见子模块 `logging-framework/macos/AgentLog`（真源文档 `Docs/macos-agent-logging-design.md`）。
-- **Web / 服务端**：完整实现见子模块 `logging-framework/web/Observability`（包名 `@scaffold/observability`），`LogEvent` 即线格式（§3）。
-- **Android（Kotlin）**：实现已抽为独立仓库并以 submodule 挂入 `logging-framework/android/AgentLog`，真源仓库 [`agent-log-android`](https://github.com/lovexiaov/agent-log-android)（含 `agentlog-core` 纯 JVM 核心 + `agentlog-android` AGP 胶水库，详见该仓库 `README.md`）。与 macos/web 完全对齐：线格式与 §3 Schema 逐字相同；门禁契约由 `ai-dev-spec` 的 `tooling/adapters/kotlin.mjs` 适配器 + 核心模块内 `.toolchain.json` 驱动。独立仓库内可经 Gradle wrapper 单独编译、跑 `SchemaTests` 门禁。
-- **Java（JVM 服务端 / 库）**：实现见子模块 `logging-framework/java/AgentLog`，真源仓库 [`agent-log-java`](https://github.com/lovexiaov/agent-log-java)。Maven 工程、**零运行时依赖**（手写 JSON 序列化/解析，不用 Jackson/Gson），JDK 17；`mvn test` 跑 `SchemaTests`（C7 字段集断言）门禁，`checkstyle` 为风格门禁。
-- **Go（服务端）**：实现见子模块 `logging-framework/go/AgentLog`，真源仓库 [`agent-log-go`](https://github.com/lovexiaov/agent-log-go)。**仅标准库**（零第三方依赖），`go test ./...` 跑 `TestSchemaConformance`（C7）门禁；内置 `HTTPMiddleware`（network_request）与 `InstallPanicHandler`（crash）自动埋点；`gofmt` / `go vet` 为门禁。
-- **Python（服务端 / 脚本）**：实现见子模块 `logging-framework/python/AgentLog`，真源仓库 [`agent-log-python`](https://github.com/lovexiaov/agent-log-python)。**仅标准库**（`unittest`，不依赖 pytest / jsonschema），`python3 -m unittest discover -s tests` 跑 `SchemaTests`（C7）门禁；含 `install_crash_handler()` 自动埋点。
+- **macOS（原生 AppKit）**：完整设计与可运行代码见子模块 `logging-framework/macos/AgentLog`（真源文档 `Docs/macos-agent-logging-design.md`）；自动埋点含 AppKit 运行时 swizzle（零代码：`screen_view` / `ui_interaction` / `network_request`）+ KSCrash（`crash`）+ watchdog（`hang`）。
+- **Web / 服务端**：完整实现见子模块 `logging-framework/web/Observability`（npm 包名 `cn.lovexiaov.agent.log`，仓库名仍为 `agent-log-web`），`LogEvent` 即线格式（§3）。
+- **Android（Kotlin）**：实现已抽为独立仓库并以 submodule 挂入 `logging-framework/android/AgentLog`，真源仓库 [`agent-log-android`](https://github.com/lovexiaov/agent-log-android)（含 `agentlog-core` 纯 JVM 核心 + `agentlog-android` AGP 胶水库，详见该仓库 `README.md`）。与 macos/web 完全对齐：线格式与 §3 Schema 逐字相同；门禁契约由 `ai-dev-spec` 的 `tooling/adapters/kotlin.mjs` 适配器 + 核心模块内 `.toolchain.json` 驱动。独立仓库内可经 Gradle wrapper 单独编译、跑 `SchemaTests` 门禁；自动埋点含 OkHttp `AgentNetworkInterceptor`（`network_request` + `traceparent` 注入）、`HangMonitor`（主线程卡顿→`hang`）、生命周期→`screen_view`、未捕获异常→`crash`。
+- **Java（JVM 服务端 / 库）**：实现见子模块 `logging-framework/java/AgentLog`，真源仓库 [`agent-log-java`](https://github.com/lovexiaov/agent-log-java)。Maven 工程、**零运行时依赖**（手写 JSON 序列化/解析，不用 Jackson/Gson），JDK 17；`mvn test` 跑 `SchemaTests`（C7 字段集断言）门禁，`checkstyle` 为风格门禁；含 `JdbcInstrumentation`（包装 `DataSource`/`Connection`→`db_query`）与 `installCrashHandler()`（JVM 未捕获异常→`crash`）自动埋点。
+- **Go（服务端）**：实现见子模块 `logging-framework/go/AgentLog`，真源仓库 [`agent-log-go`](https://github.com/lovexiaov/agent-log-go)。**仅标准库**（零第三方依赖），`go test ./...` 跑 `TestSchemaConformance`（C7）门禁；内置 `WrapDB`（包装 `*sql.DB` 自动记 `db_query`）与 `InstallPanicHandler`（包裹入口捕获 panic→`crash`）自动埋点——**无 HTTP 客户端中间件自动埋点**，网络事件需手动 `RecordAuto` 或经 `statusRecorder`；`gofmt` / `go vet` 为门禁。
+- **Python（服务端 / 脚本）**：实现见子模块 `logging-framework/python/AgentLog`，真源仓库 [`agent-log-python`](https://github.com/lovexiaov/agent-log-python)。**仅标准库**（`unittest`，不依赖 pytest / jsonschema），`python3 -m unittest discover -s tests` 跑 `SchemaTests`（C7）门禁；含 `install_crash_handler()`（未捕获异常→`crash`）与 `instrument_requests()`（patch `requests` 库→`network_request`）自动埋点；Python 依旧零第三方依赖——`requests` 未安装时 `instrument_requests` 为 no-op。
 - **其他端**：遵循 §2 通用约束与 §3 Schema，平台细节自维护，不在本脚手架重复。
 
 ## 6. 与 ai-dev-spec 的一致性
@@ -113,7 +114,7 @@ Schema v1 是**事件源**格式，OTel/OTLP 是**传输与后端**标准，二�
 - 每条事件 → 一条 OTLP `LogRecord`；
 - `network_request` / `db_query` → 额外一条 `SPAN_KIND_CLIENT` Span（HTTP / Database 语义约定）；
 - `critical` → `FATAL`(21)；`payload.*` 展平为 `payload.<k>` 属性；
-- `traceId`：32 位 hex 原样透传，其余字符串 SHA-256 派生；`spanId`：事件自带合法 `span_id`（v1.1）优先原样透传，缺失才 SHA-256 派生——派生不引入随机性，重试与重放保持幂等。
+- `traceId`：**32 位 hex 强制（v1.2）**；非法/缺失值在写入边界**丢弃该字段**（事件照写），LogRecord 不带 `traceId`/`spanId`（绝不哈希派生，详见 `OTLP-MAPPING.md` §6）。`spanId`：事件自带合法 `span_id`（v1.1，16 位 hex）原样透传；仅当该事件要发 span 且缺失时才确定性派生（种子含原始 `trace_id`，六端一致，不引入随机性）。
 
 已实现（**六端适配器齐全**）：
 
