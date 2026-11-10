@@ -50,6 +50,33 @@
 
 框架不实现：Sentry / Datadog / APM 上报、breadcrumb、`stack` 的结构化 frames、崩溃事件落盘与重放（交宿主 sink 决定）。这些能力若需要，由下游基于上述数据自行构建。
 
+### 4.4 AI 交互事件（Schema v1.4）
+
+框架为 AI / Agent 调用提供统一的事件契约，让任意端的 LLM 调用都产出结构一致、可被下游按 `event_type` 程序化过滤、按 `request_id` 串联的事件。
+
+**6 个标准 `event_type`（snake_case）**：
+
+| event_type | 含义 | 推荐 level | agent_auto |
+| --- | --- | --- | --- |
+| `ai_request_initiated` | 一次 LLM 调用的请求发起 | info | false |
+| `ai_response_received` | 收到模型响应 | info | false |
+| `ai_tool_call_initiated` | 工具调用发起 | info | false |
+| `ai_tool_call_completed` | 工具调用完成 | info | false |
+| `ai_guardrail_triggered` | 护栏 / 合规拦截触发 | warn | false |
+| `ai_error` | AI 交互出错 | error | false |
+
+- `agent_auto=false`：AI 事件是业务代码**显式埋点**（框架提供便捷方法），区别于 crash / network 的自动埋点。
+- **标准 payload 词表**（snake_case，置于 `payload`，缺省即不写）：
+  - `ai_request_initiated`：`model`、`provider`、`prompt_text`、`system_prompt`(可选)、`messages_count`、`request_id`
+  - `ai_response_received`：`model`、`provider`、`response_length`、`prompt_tokens`、`completion_tokens`、`total_tokens`、`finish_reason`、`latency_ms`、`request_id`
+  - `ai_tool_call_initiated`：`tool_name`、`tool_arguments`(任意 JSON)、`request_id`
+  - `ai_tool_call_completed`：`tool_name`、`tool_call_latency_ms`、`ok`(bool)、`request_id`
+  - `ai_guardrail_triggered`：`guardrail_type`、`reason`、`request_id`
+  - `ai_error`：复用 §4.2 异常词表 `exception` / `exception_message` / `stack` / `mechanism` + `request_id`
+  - `request_id`（可选）：串联「请求→响应→工具→错误」同一轮对话；若存在应跨该轮保持一致，框架不强制。
+- **脱敏**：`prompt_text` / `tool_arguments` / `system_prompt` 视为潜在敏感内容；沿用各端既有的全局脱敏键（不可关闭）与自由文本正则，不新增 AI 专属脱敏逻辑。需要整键掩码的业务字段由调用方通过 `redact` 追加。
+- **OTLP 映射（与 §4.3 一致）**：AI 事件只作为 **log 信号**导出（`event_to_log_record`），**不产 span**；可携带 `span_id` 供下游基于 `event_type` 自行组 span。`ai_error` 因复用 §4.2 异常词表，与 `crash` / `hang` 一样额外映射为 OTel `exception.type` / `exception.message` / `exception.stacktrace` 属性（仍在 LogRecord 内，不产 span）。
+
 ## 5. 配置（语言中立）
 
 统一读取 `config/logging.config.json`（Schema：`config/logging.config.schema.json`）。

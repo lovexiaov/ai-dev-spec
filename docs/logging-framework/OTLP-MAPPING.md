@@ -1,6 +1,6 @@
 # agent-log → OpenTelemetry (OTLP) 映射规范
 
-> **状态（2026-11-10，Schema v1.3.0）**：D3「OTel 对齐」规范真源。六端适配器全部落地：
+> **状态（2026-11-11，Schema v1.4.0）**：D3「OTel 对齐」规范真源。六端适配器全部落地：
 > Python（`agentlog/otlp.py`）、Go（`agentlog/otlp.go`）、Java（`OtlpMapper`）、
 > Kotlin/Android（`OtlpMapper`）、Web/TS（`src/otlp.ts`）、Swift/macOS（`OtlpMapper`）；
 > 内置 HTTP exporter 仅 Python / Go 提供（其余端传输交宿主 `HttpClient` / `OkHttp` / `fetch` / `URLSession`）。
@@ -22,7 +22,7 @@ agent-log 与 OTel 不是竞争关系，而是**两层**：
 2. **操作类事件额外产出一条 `Span`**（traces 信号），用于分布式链路视图：
    - `network_request` → `SPAN_KIND_CLIENT`，套 HTTP 语义约定；
    - `db_query` → `SPAN_KIND_CLIENT`，套 Database 语义约定。
-3. **其余事件不发 span**：`log` / `ui_interaction` / `screen_view` 不是"调用跨度"，`crash` / `hang` 留在 logs 信号（附 `exception.*` 属性）。
+3. **其余事件不发 span**：`log` / `ui_interaction` / `screen_view` 不是"调用跨度"，`crash` / `hang` 留在 logs 信号（附 `exception.*` 属性）；Schema v1.4 的 6 个 AI 交互事件（`ai_*`）同样**只发 logs、不产 span**——框架只准备数据，下游可基于 `event_type` + `request_id` 自行组 span。
 4. **id 优先透传、span 缺失才派生**（见 §6）：`trace_id` 与 `span_id` 合法即透传（均为固定长度 hex）；仅 span 缺失 `span_id` 时确定性派生，保证同一事件重复导出得到同一 `spanId`，重试与重放幂等。
 5. **OTLP 是传输格式，不是存储格式**：`payload` 展平后作为属性发送，不做二次脱敏——脱敏已在 logger 层完成（C6）。
 
@@ -47,7 +47,7 @@ agent-log 与 OTel 不是竞争关系，而是**两层**：
 | `span_id` | `spanId` | 统一追踪模型的操作跨度标识；合法（16 位小写 hex）时原样透传，缺失才派生（§6）；无 `trace_id` 时不写入 |
 | （派生） | `spanId` | 仅当该事件同时产出 span 且未自带 `span_id` 时派生（§7） |
 
-补充：`crash` / `hang` 额外从 `payload` 提取
+补充：`crash` / `hang` / `ai_error`（Schema v1.4，复用 v1.3 异常词表）额外从 `payload` 提取
 
 | payload | attribute |
 | --- | --- |
@@ -213,10 +213,11 @@ python3 tools/otlp-compat-verify/xlang_verify.py --only java,go
 - 工具链缺失或构建失败会 `SKIP` 而非判失败；一旦某端可用就必然参与比对（不存在"悄悄跳过"）。
 - 退出码：全一致 `0`、存在真实差异 `1`、基准不可用或全部跳过 `2`。
 
-实测（六端全部可用，2026-11-10 / Schema v1.3.0）：`java` / `kotlin` 与基准**逐字一致**，
+实测（六端全部可用，2026-11-11 / Schema v1.4.0，9 条样例含 2 条 AI 事件）：`java` / `kotlin` 与基准**逐字一致**，
 `go` / `web` / `swift` 仅剩下述数字表示差异，`traces` 六端**逐字一致**；带 `release` 的两组
-resource 在六端都产出 `service.version`，异常样例的 `exception.type` / `exception.message` /
-`exception.stacktrace` 三键在六端完全一致。
+resource 在六端都产出 `service.version`，异常样例（含 `ai_error`）的 `exception.type` /
+`exception.message` / `exception.stacktrace` 三键在六端完全一致；`traces` 里逐端都只有
+HTTP / DB 两条 span，**没有任何 AI span**。
 
 ### 10.2 已知跨语言差异（仅数字表示，语义等价）
 

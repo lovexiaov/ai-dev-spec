@@ -107,5 +107,47 @@
       "stack": "0   DemoApp   -[Cart total]\n1   libsystem_kernel.dylib   __pthread_kill",
       "mechanism": "uncaught"
     }
+  },
+  {
+    "ts": "2026-11-02T13:37:27.000Z",
+    "level": "info",
+    "service": "web-api",
+    "event_type": "ai_response_received",
+    "session_id": "sess-0001",
+    "agent_auto": false,
+    "message": "ai response received",
+    "env": "prod",
+    "category": "ai",
+    "trace_id": "4bf92f3577b34da6a3ce929d0e0e4736",
+    "payload": {
+      "model": "gpt-4o",
+      "provider": "openai",
+      "response_length": 1280,
+      "prompt_tokens": 320,
+      "completion_tokens": 210,
+      "total_tokens": 530,
+      "finish_reason": "stop",
+      "latency_ms": 842,
+      "request_id": "req_001"
+    },
+    "release": "2.3.1"
+  },
+  {
+    "ts": "2026-11-02T13:37:28.000Z",
+    "level": "error",
+    "service": "web-api",
+    "event_type": "ai_error",
+    "session_id": "sess-0001",
+    "agent_auto": false,
+    "message": "ai interaction error",
+    "env": "prod",
+    "category": "ai",
+    "payload": {
+      "exception": "RateLimitError",
+      "exception_message": "429 too many requests",
+      "stack": "RateLimitError: 429 too many requests",
+      "mechanism": "handled",
+      "request_id": "req_001"
+    }
   }
 ]
