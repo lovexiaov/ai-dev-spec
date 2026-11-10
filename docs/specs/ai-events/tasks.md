@@ -54,8 +54,8 @@
   - 验证：六端 `telemetry.sdk.version` 实测全为 `1.4.0`；`xlang_verify.py` EXIT=0（9 样例）；六端测试复跑全绿（115 / ok / 66 / check / 68 / 70）
   - 判定：✅ 六端 SDK 版本 = 1.4.0，与 schema v1.4.0 对齐
 
-- [ ] **T11** 提交 + 发版：六子仓 commit + tag `v1.4.0` + monorepo 指针更新 + 推送 + 7 仓 CI 全绿（**推送待用户确认**）
-  - 状态：in_progress | 证据：Verified（本地部分）/ Not run（推送与 CI）
+- [x] **T11** 提交 + 发版：六子仓 commit + tag `v1.4.0` + monorepo 指针更新 + 推送 + 7 仓 CI 全绿
+  - 状态：done | 证据：Verified
   - 已完成：六子仓均在 `main` 上提交 `feat(schema-v1.4): 六端统一 AI 交互事件并发布 1.4.0`，
     各打 annotated tag `v1.4.0`（已核对 `v1.4.0^{}` == HEAD）；六仓工作区干净、无残留改动；
     新 AI 源文件与测试文件均已入提交。monorepo 已更新 6 个 submodule 指针与契约文档。
@@ -64,12 +64,13 @@
   - CI 修正：首轮 Go CI 与 monorepo CI 均因 `agentlog/event.go` 未 `gofmt` 失败（纯格式）。
     补 `style(go): gofmt event.go (CI lint)` 提交后，Go 的 `v1.4.0` tag 重新指向修复提交
     （tag 为刚发布、无外部消费，force-update 可接受），monorepo 同步 Go submodule 指针。
-  - 判定：7 仓 CI success；远端 tag `v1.4.0` 就绪。macOS CI 受 GitHub macOS arm64
-    runner 容量排队影响，与代码无关。
+  - macOS CI 首两轮因 GitHub 托管 macOS arm64 runner 容量排队失败
+    （"job not acquired by Runner"，非代码问题），重跑后通过。
+  - 判定：✅ **7 仓 CI 全部 success**（python/go/java/android/web/macos/monorepo）；远端 tag `v1.4.0` 就绪。
 
 ## 完成标准
 
-- T1–T9 全绿；T10 版本对齐；T11 提交 + tag 完成（推送需人工确认）。测试未全绿前任何项不得标记 done。
+- T1–T11 全部 done；7 仓 CI success；tag `v1.4.0` 已推送远端。
 
 ## 本机六端测试快照（T8 后复跑，含 OTLP 改动）
 
