@@ -59,8 +59,13 @@
   - 已完成：六子仓均在 `main` 上提交 `feat(schema-v1.4): 六端统一 AI 交互事件并发布 1.4.0`，
     各打 annotated tag `v1.4.0`（已核对 `v1.4.0^{}` == HEAD）；六仓工作区干净、无残留改动；
     新 AI 源文件与测试文件均已入提交。monorepo 已更新 6 个 submodule 指针与契约文档。
-  - 待办：**推送 7 仓 + tag（不可逆，需用户明确确认）** → 7 仓 CI success。
-  - 判定：7 仓 CI success；远端 tag `v1.4.0` 就绪
+  - 推送：用户确认「全部推送（7 仓 commit + 6 个 tag），仅 Git tag、不发 npm/PyPI/Release」；
+    7 仓已全部推送成功（monorepo pre-push gate-runner 全绿）。
+  - CI 修正：首轮 Go CI 与 monorepo CI 均因 `agentlog/event.go` 未 `gofmt` 失败（纯格式）。
+    补 `style(go): gofmt event.go (CI lint)` 提交后，Go 的 `v1.4.0` tag 重新指向修复提交
+    （tag 为刚发布、无外部消费，force-update 可接受），monorepo 同步 Go submodule 指针。
+  - 判定：7 仓 CI success；远端 tag `v1.4.0` 就绪。macOS CI 受 GitHub macOS arm64
+    runner 容量排队影响，与代码无关。
 
 ## 完成标准
 
