@@ -83,14 +83,36 @@ gh run list / gh run watch                 # monorepo e7299f6 CI success；六�
 
 ## Next Steps（下一步）
 
-1. **发布渠道决策（未做，等产品判断）**：仅打了 Git tag；npm / PyPI / GitHub Release 均未发。
+1. **发布渠道决策（未做，等产品判断）**：npm / PyPI / GitHub Release 均未发；账号注册 + 2FA
+   只能由人工完成。发布配置已就绪（见下「发布准备状态」）。
 2. 下游消费侧可选工作（不在本 spec 范围）：按 `request_id` 聚合「请求→响应→工具→错误」
    轮次视图、AI 事件看板、按 `model`/`provider` 维度统计。
 3. 若做 LLM SDK 自动埋点（hook OpenAI/Anthropic 等），需新开 spec——本期明确为非目标。
 
+## 发布准备状态（2026-11-13 增补）
+
+- **Python / Web 两仓已改为可发布形态**，tag `v1.4.0` 已重指到这些提交并推送：
+  - python `71bd978`：`[build-system].requires = ["setuptools>=61"]`（原为空导致隔离构建
+    `BackendUnavailable`）+ PyPI 元信息；wheel/sdist 实测构建通过。
+  - web `1f02605`：`package.json` 的 `main`/`types`/`exports`/`files` 从 `src/*.ts` 改指编译产物
+    `dist/`；`npm pack --dry-run` 仅含 33 个 dist 文件（含 `.d.ts`），`dist/` 本身不入库，
+    release 流程需先 `pnpm build` 再 publish。
+- **`release.yml` 未推送（人工挂起）**：各子仓提交了 tag 触发的发布工作流
+  （python `ed04461` / web `ca1b97f`），但 push 被 GitHub 拒绝——当前 PAT 缺 `workflow`
+  scope（`git` 经 `gh auth git-credential` 取凭据）。这两个提交**保存在各子仓本地分支
+  `wip/release-ci`**，未删除、未改写。
+- 用户已决定：将来 `release.yml` **只进 main，tag 保持 publish-config 不动**（v1.4.0 手动发布，
+  CI 管未来版本）。恢复步骤：给 PAT 加 `workflow` scope → 各子仓
+  `git checkout main && git merge wip/release-ci && git push origin main` → monorepo 按需更新指针。
+- **悬空引用已修复（monorepo `33124fe`）**：此前 `1019b44` 把 python/web 指针记成了上面两个
+  本地未推送的 release.yml 提交，导致 `git clone --recurse-submodules` 会检出失败。现已把两仓
+  `main` 对齐到已推送提交、monorepo 指针回指 `71bd978`/`1f02605`；全新 clone 实测两子模块
+  成功检出（`git submodule status` 均显示 `v1.4.0`）。
+
 ## Blockers / Open Questions（阻塞与待解）
 
-- 无阻塞。spec 验收条件 7 项全部勾选（见 `spec.md` Acceptance Criteria）。
+- spec 验收条件 7 项全部勾选（见 `spec.md` Acceptance Criteria），**无代码阻塞**。
+- 外部待解：npm/PyPI 账号 + 2FA；PAT 的 `workflow` scope。二者均为人工操作，挂起中。
 
 ## How to Verify（如何验证）
 
