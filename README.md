@@ -57,6 +57,8 @@ pnpm lint && pnpm typecheck && pnpm test
 | 你想做什么                        | 看哪里                                                                                                      |
 | --------------------------------- | ----------------------------------------------------------------------------------------------------------- |
 | 了解全局协作规则 / 约束 Agent     | [`AGENTS.md`](./AGENTS.md)                                                                                  |
+| 启用多 Agent / 查看角色分工       | [`.agents/README.md`](./.agents/README.md)                                                                  |
+| 复用项目自动流程（校验 / 发版）   | [`.workbuddy/skills/`](./.workbuddy/skills)                                                                 |
 | 了解项目不可妥协的原则            | [`docs/constitution.md`](./docs/constitution.md)                                                            |
 | 开始一个新特性（规范三件套）      | 复制 [`docs/specs/_template/`](./docs/specs/_template)                                                      |
 | 交接 / 续接 Agent 进度            | 看 [`docs/specs/_template/handoff.md`](./docs/specs/_template/handoff.md) + `AGENTS.md` §7                  |

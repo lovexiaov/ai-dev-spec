@@ -27,7 +27,10 @@ Thumbs.db
 !.vscode/extensions.json
 
 # 本地 Agent 工作记忆（机器级状态，不随模板分发）
-.workbuddy/
+.workbuddy/*
+# 例外：项目级 skill 是团队共享资产，必须入库；.workbuddy/memory/ 仍被忽略
+!.workbuddy/skills/
+!.workbuddy/skills/**
 
 # 框架产物（AgentLog 导出的运行日志）
 *.agent-log.jsonl

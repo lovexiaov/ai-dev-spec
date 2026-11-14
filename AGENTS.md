@@ -56,7 +56,8 @@
 ## 5. 规范与路由
 
 - 项目级原则见 `docs/constitution.md`（人 owner 维护）。
-- 若采用多 Agent（planner/coder/reviewer/security），人格定义见 `.agents/`，交接协议以 `plan.md` 为书面合同。
+- 多 Agent（planner/coder/reviewer/security）人格与交接协议见 `.agents/README.md`；书面合同是 `plan.md`。
+- 可复用自动流程在 `.workbuddy/skills/`（`xlang-verify` 跨端校验、`multi-repo-release` 多仓发版）；该目录属团队共享资产，已从 `.gitignore` 例外放行。
 - 本文件只放「全局 + 跨工具」规则；单文件类型规则下沉到对应工具的规则文件。
 
 ## 6. 质量基线与约定
