@@ -91,6 +91,9 @@ gh run list / gh run watch                 # monorepo e7299f6 CI success；六�
 
 ## 发布准备状态（2026-11-13 增补）
 
+> 完整的人工操作步骤见同目录 **[`RELEASING.md`](./RELEASING.md)**：账号注册 + 2FA、凭据绑定、手动首发命令、
+> `wip/release-ci` 恢复步骤、故障速查。本节只记状态快照。
+
 - **Python / Web 两仓已改为可发布形态**，tag `v1.4.0` 已重指到这些提交并推送：
   - python `71bd978`：`[build-system].requires = ["setuptools>=61"]`（原为空导致隔离构建
     `BackendUnavailable`）+ PyPI 元信息；wheel/sdist 实测构建通过。
