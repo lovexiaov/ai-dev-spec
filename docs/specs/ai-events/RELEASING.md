@@ -8,18 +8,18 @@
 
 ## 0. 先读：两条路径的不对称
 
-|                          | PyPI（python）                                                                           | npm（web）                                                                         |
-| ------------------------ | ---------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| 包名                     | `agentlog`（PyPI 未被占用；原名 `cn.lovexiaov.agent.log` 已弃用）                        | `cn.lovexiaov.agent.log`（unscoped）                                               |
-| 版本                     | `1.4.0`                                                                                  | `1.4.0`                                                                            |
-| 首次发布能否全自动       | **能**：可预配 _pending publisher_，首次使用即创建项目、无需 API token                   | **不能**：Trusted Publishing 要求包名已存在于 registry，首次必须手动 `npm publish` |
-| 2FA 后如何传凭据         | 必须用 **API token**（`__token__`）；账密会被拒                                          | 交互式发布输 OTP；CI 用带 _bypass 2FA_ 的 Granular Access Token                    |
-| `release.yml` 的认证方式 | Trusted Publishing（OIDC，免 token，`id-token: write`）                                  | `secrets.NPM_TOKEN` + `--provenance`                                               |
-| 当前既定决策             | **v1.4.0 手动首发；distribution 名改 `agentlog` 后已重打 v1.4.0；release.yml 只进 main** | **npm 包名不变**；release.yml 只进 main                                            |
+|                          | PyPI（python）                                                                              | npm（web）                                                                         |
+| ------------------------ | ------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| 包名                     | `agentlog-py`（PyPI 未被占用；`agentlog` 因与 `agent-log` 过近被拒）                        | `cn.lovexiaov.agent.log`（unscoped）                                               |
+| 版本                     | `1.4.0`                                                                                     | `1.4.0`                                                                            |
+| 首次发布能否全自动       | **能**：可预配 _pending publisher_，首次使用即创建项目、无需 API token                      | **不能**：Trusted Publishing 要求包名已存在于 registry，首次必须手动 `npm publish` |
+| 2FA 后如何传凭据         | 必须用 **API token**（`__token__`）；账密会被拒                                             | 交互式发布输 OTP；CI 用带 _bypass 2FA_ 的 Granular Access Token                    |
+| `release.yml` 的认证方式 | Trusted Publishing（OIDC，免 token，`id-token: write`）                                     | `secrets.NPM_TOKEN` + `--provenance`                                               |
+| 当前既定决策             | **v1.4.0 手动首发；distribution 名改 `agentlog-py` 后已重打 v1.4.0；release.yml 只进 main** | **npm 包名不变**；release.yml 只进 main                                            |
 
 已确认的事实（不要重复排查）：
 
-- 包名含点是合法的：`validate-npm-package-name` 官方示例 `example.com` 即带点；npm 包名 `cn.lovexiaov.agent.log` 全小写、URL-safe、不以 `.` 开头，两个 registry 上均**未被占用**。Python distribution 名已改为 `agentlog`（PyPI 未被占用；该名在 npm 已被占，故 npm 不采用）。
+- 包名含点是合法的：`validate-npm-package-name` 官方示例 `example.com` 即带点；npm 包名 `cn.lovexiaov.agent.log` 全小写、URL-safe、不以 `.` 开头，两个 registry 上均**未被占用**。Python distribution 名最终用 `agentlog-py`（`agentlog` 与既有项目 `agent-log` 过近、`agent-log-sdk` 与 `agentlog-sdk` 过近，均被 PyPI 相似度规则拒；`agentlog-py` 的 strip 形态 `agentlogpy` 各写法全 free）。import 包名仍为 `agentlog`。
 - 本机 `~/.npmrc` 把 registry 指向 `https://registry.npmmirror.com`（淘宝镜像），**publish 前必须切回官方源**，否则报 `ENEEDAUTH`。
 - 本机 git 走 `gh auth git-credential`，用的是**经典 PAT `ghp_…`**，当前 scopes 为 `admin:org, admin:public_key, delete:packages, repo, write:packages` —— **缺 `workflow`**，这是 `release.yml` 推送被拒的唯一原因。
 - Python 端本机 `twine` 已装（7.0.0；`build` 1.6.1）；`dist/` 在两端都不入库（`.gitignore`），发布前必须现构建。
@@ -88,7 +88,7 @@ TWINE_USERNAME=__token__ TWINE_PASSWORD=pypi-<你的token> python3 -m twine uplo
 #   password = pypi-<你的token>
 ```
 
-产物实测（2026-11-15）：`agentlog-1.4.0-py3-none-any.whl`（含全部 `agentlog` 模块 + LICENSE + METADATA）与 `agentlog-1.4.0.tar.gz`（含 `agentlog/` + README + LICENSE + pyproject）。
+产物实测（2026-11-15）：`agentlog_py-1.4.0-py3-none-any.whl`（含全部 `agentlog` 模块 + LICENSE + METADATA）与 `agentlog_py-1.4.0.tar.gz`（含 `agentlog/` + README + LICENSE + pyproject）。
 
 ### 2.2 Web → npm
 
@@ -111,7 +111,7 @@ npm publish --registry=https://registry.npmjs.org/ --otp=<验证器6位码>
 
 | 子仓   | `wip/release-ci` | 当前 main（= tag v1.4.0） |
 | ------ | ---------------- | ------------------------- |
-| python | `ed04461`        | `4b5c8d3`                 |
+| python | `ed04461`        | `46677f7`                 |
 | web    | `ca1b97f`        | `1f02605`                 |
 
 ```bash
@@ -120,7 +120,7 @@ git checkout main && git merge wip/release-ci && git push origin main
 # 同理在 logging-framework/web/Observability 执行一遍
 ```
 
-- **tag v1.4.0 已前移到改名提交 `4b5c8d3`**（不含 release.yml）。这是在 v1.4.0 **从未上传 PyPI** 的前提下做的，为让 tag 与发布物一致；main 快进、tag 已 force push 到远端。
+- **tag v1.4.0 已前移到改名提交 `46677f7`**（distribution 名 `agentlog-py`，不含 release.yml）。这是在 v1.4.0 **从未上传 PyPI** 的前提下做的，为让 tag 与发布物一致；main 快进、tag 已 force push 到远端。
 - 合并后 main 前进而 tag 未动，monorepo 指针是否跟进是**可选**的：不跟也不影响 clone（现指针 `71bd978`/`1f02605` 已在远端存在）；若要跟，先把子仓 push 成功再更新 gitlink（参见 MEMORY.md：指针只能指向远端已存在的提交）。
 - monorepo `33124fe` 已修掉此前「指针指向本地未推送提交」的悬空引用，全新 `clone --recurse-submodules` 实测通过。
 
@@ -137,7 +137,7 @@ git checkout main && git merge wip/release-ci && git push origin main
 
 | 字段              | 值                                       |
 | ----------------- | ---------------------------------------- |
-| PyPI project name | `agentlog`                               |
+| PyPI project name | `agentlog-py`                            |
 | Owner             | `lovexiaov`                              |
 | Repository name   | `agent-log-python`                       |
 | Workflow name     | `release.yml`（只填文件名，不带路径）    |
@@ -168,9 +168,9 @@ git checkout main && git merge wip/release-ci && git push origin main
 
 ```bash
 # PyPI
-pip install --index-url https://pypi.org/simple agentlog==1.4.0
+pip install --index-url https://pypi.org/simple agentlog-py==1.4.0
 python3 -c "import agentlog; print(agentlog.__version__)"
-open https://pypi.org/project/agentlog/
+open https://pypi.org/project/agentlog-py/
 
 # npm（干净临时目录，验证三个 exports 子路径）
 npm view cn.lovexiaov.agent.log version --registry=https://registry.npmjs.org/
