@@ -89,17 +89,23 @@ gh run list / gh run watch                 # monorepo e7299f6 CI success；六�
    轮次视图、AI 事件看板、按 `model`/`provider` 维度统计。
 3. 若做 LLM SDK 自动埋点（hook OpenAI/Anthropic 等），需新开 spec——本期明确为非目标。
 
-## 发布准备状态（2026-11-13 增补）
+## 发布准备状态（2026-11-16 更新）
 
 > 完整的人工操作步骤见同目录 **[`RELEASING.md`](./RELEASING.md)**：账号注册 + 2FA、凭据绑定、手动首发命令、
-> `wip/release-ci` 恢复步骤、故障速查。本节只记状态快照。
+> `wip/release-ci` 恢复步骤、故障速查（含 §0.1 npm 2FA 现状）。本节只记状态快照。
 
-- **Python / Web 两仓已改为可发布形态**，tag `v1.4.0` 已重指到这些提交并推送：
-  - python `71bd978`：`[build-system].requires = ["setuptools>=61"]`（原为空导致隔离构建
-    `BackendUnavailable`）+ PyPI 元信息；wheel/sdist 实测构建通过。
-  - web `1f02605`：`package.json` 的 `main`/`types`/`exports`/`files` 从 `src/*.ts` 改指编译产物
-    `dist/`；`npm pack --dry-run` 仅含 33 个 dist 文件（含 `.d.ts`），`dist/` 本身不入库，
-    release 流程需先 `pnpm build` 再 publish。
+- **PyPI 首发已完成**：`agentlog-py 1.4.0` → <https://pypi.org/project/agentlog-py/1.4.0/>，
+  官方源全新安装 + 运行验证通过。python 子仓 `46677f7`，tag `v1.4.0` 已前移到此提交。
+- **npm 首发受阻，但**不是**代码或网络问题**：包名定为 `agentlog-js`，构建与打包已就绪
+  （`agentlog-js-1.4.0.tgz`，37.1 kB / 35 files，全在 `dist/`），web 子仓 `53c98b4`，tag 已前移。
+  卡点是 npm 账号的 2FA 政策链：
+  - 2026-11-16 22:50 左右用**恢复码**完成登录 → 触发 npm **72 小时只读冻结**，
+    预计 **2026-11-19 22:50 之后**自动解除（无需工单，但**期间不能再动 2FA，否则重置计时**）。
+  - 冻结期间 publish / 建 token 全部 `403 temporarily suspended`，只读操作（whoami / view / 安装）正常。
+  - 解除后的解锁顺序：① 能打开 `www.npmjs.com`（家宽出口 IP 被 Cloudflare 拦 403，用手机热点换 IP）
+    → ② 绑 WebAuthn 安全密钥（Mac 可直接用 Touch ID，npm 已不支持 TOTP 认证器）
+    → ③ 在**真实终端**跑 `npm publish`，浏览器弹窗确认。详见 RELEASING.md §0.1。
+  - Agent 无法代劳发布：无 TTY 环境会直接 `EOTP` 失败，只读验证（`npm view` + 安装冒烟）可代劳。
 - **`release.yml` 未推送（人工挂起）**：各子仓提交了 tag 触发的发布工作流
   （python `ed04461` / web `ca1b97f`），但 push 被 GitHub 拒绝——当前 PAT 缺 `workflow`
   scope（`git` 经 `gh auth git-credential` 取凭据）。这两个提交**保存在各子仓本地分支
@@ -107,15 +113,18 @@ gh run list / gh run watch                 # monorepo e7299f6 CI success；六�
 - 用户已决定：将来 `release.yml` **只进 main，tag 保持 publish-config 不动**（v1.4.0 手动发布，
   CI 管未来版本）。恢复步骤：给 PAT 加 `workflow` scope → 各子仓
   `git checkout main && git merge wip/release-ci && git push origin main` → monorepo 按需更新指针。
-- **悬空引用已修复（monorepo `33124fe`）**：此前 `1019b44` 把 python/web 指针记成了上面两个
-  本地未推送的 release.yml 提交，导致 `git clone --recurse-submodules` 会检出失败。现已把两仓
-  `main` 对齐到已推送提交、monorepo 指针回指 `71bd978`/`1f02605`；全新 clone 实测两子模块
-  成功检出（`git submodule status` 均显示 `v1.4.0`）。
+- **submodule 指针一致**：python `46677f7` / web `53c98b4` 均已在远端存在，monorepo 指针为
+  `46677f7` / `53c98b4`（提交 `380fead`），全新 `clone --recurse-submodules` 可正常检出。
 
 ## Blockers / Open Questions（阻塞与待解）
 
 - spec 验收条件 7 项全部勾选（见 `spec.md` Acceptance Criteria），**无代码阻塞**。
-- 外部待解：npm/PyPI 账号 + 2FA；PAT 的 `workflow` scope。二者均为人工操作，挂起中。
+- 外部待解（均为人工操作，挂起中）：
+  - **npm 首发**：账号处于 **72 小时安全冻结**（约 `2026-11-19 22:50` 自动解除）。解除后还需
+    解决 `www.npmjs.com` 访问（Cloudflare 拦家宽 IP）+ 绑定 WebAuthn 安全密钥，再由人工在
+    真实终端发布。操作顺序见 RELEASING.md §0.1。
+  - **PAT `workflow` scope**：`release.yml` 推送仍挂起。
+  - PyPI 侧无待办（`agentlog-py 1.4.0` 已上线并验证）。
 
 ## How to Verify（如何验证）
 

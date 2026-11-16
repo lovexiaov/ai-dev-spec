@@ -8,23 +8,57 @@
 
 ## 0. 先读：两条路径的不对称
 
-|                          | PyPI（python）                                                                              | npm（web）                                                                           |
-| ------------------------ | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
-| 包名                     | `agentlog-py`（PyPI 未被占用；`agentlog` 因与 `agent-log` 过近被拒）                        | `agentlog-js`（unscoped，与 `agentlog-py` 对齐；原名 `cn.lovexiaov.agent.log` 弃用） |
-| 版本                     | `1.4.0`                                                                                     | `1.4.0`                                                                              |
-| 首次发布能否全自动       | **能**：可预配 _pending publisher_，首次使用即创建项目、无需 API token                      | **不能**：Trusted Publishing 要求包名已存在于 registry，首次必须手动 `npm publish`   |
-| 2FA 后如何传凭据         | 必须用 **API token**（`__token__`）；账密会被拒                                             | 交互式发布输 OTP；CI 用带 _bypass 2FA_ 的 Granular Access Token                      |
-| `release.yml` 的认证方式 | Trusted Publishing（OIDC，免 token，`id-token: write`）                                     | `secrets.NPM_TOKEN` + `--provenance`                                                 |
-| 当前既定决策             | **v1.4.0 手动首发；distribution 名改 `agentlog-py` 后已重打 v1.4.0；release.yml 只进 main** | **npm 包名改 `agentlog-js` 后已重打 v1.4.0**；release.yml 只进 main                  |
+|                          | PyPI（python）                                                                              | npm（web）                                                                                    |
+| ------------------------ | ------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| 包名                     | `agentlog-py`（PyPI 未被占用；`agentlog` 因与 `agent-log` 过近被拒）                        | `agentlog-js`（unscoped，与 `agentlog-py` 对齐；原名 `cn.lovexiaov.agent.log` 弃用）          |
+| 版本                     | `1.4.0`                                                                                     | `1.4.0`                                                                                       |
+| 首次发布能否全自动       | **能**：可预配 _pending publisher_，首次使用即创建项目、无需 API token                      | **不能**：Trusted Publishing 要求包名已存在于 registry，首次必须手动 `npm publish`            |
+| 2FA 后如何传凭据         | 必须用 **API token**（`__token__`）；账密会被拒                                             | **WebAuthn 安全密钥**（Touch ID / passkey / 硬件 key），需真实 TTY + 浏览器；无 TTY 直接 EOTP |
+| `release.yml` 的认证方式 | Trusted Publishing（OIDC，免 token，`id-token: write`）                                     | `secrets.NPM_TOKEN` + `--provenance`                                                          |
+| 当前既定决策             | **v1.4.0 手动首发；distribution 名改 `agentlog-py` 后已重打 v1.4.0；release.yml 只进 main** | **npm 包名改 `agentlog-js` 后已重打 v1.4.0**；release.yml 只进 main                           |
 
 已确认的事实（不要重复排查）：
 
 - npm 名最终定为 **`agentlog-js`**，与 Python 端 `agentlog-py` 按语言对称（`pip install agentlog-py` / `npm i agentlog-js`）。选 `-js` 而非 `-node`：本包同时覆盖浏览器与 Node（`./frontend` 子路径导出 `createBrowserLogger` / `ErrorBoundary`），`-node` 会把适用范围说窄。原名 `cn.lovexiaov.agent.log` 虽为合法 npm 名（`validate-npm-package-name` 允许含点，官方示例即 `example.com`），但已弃用。`agentlog` / `agent-log` 在 npm 均已被占（前者为空占位、后者为同名工具），故不可用。Python distribution 名同样是妥协结果：`agentlog` 与既有项目 `agent-log` 过近、`agent-log-sdk` 与 `agentlog-sdk` 过近，均被 PyPI 相似度规则拒；`agentlog-py` 的 strip 形态 `agentlogpy` 各写法全 free。Python import 包名仍为 `agentlog`。
 - 本机 `~/.npmrc` 把 registry 指向 `https://registry.npmmirror.com`（淘宝镜像，**只读，不能 publish**）。已在 `package.json` 写入 `publishConfig.registry = "https://registry.npmjs.org"` 兜底，故 `npm publish` 会自动走官方源；仍建议命令行显式带 `--registry` 双重保险。
-- npm 官网 `www.npmjs.com` 在国内部分出口 IP 上会被 Cloudflare 拦成 403（`访问暂时受限 / 疑似机器人`），但 `registry.npmjs.org` 正常可达 —— **发布与 `npm view` 不依赖网页**。无网页时用 `npm login --auth-type=legacy`（或 `npm adduser`）在终端完成认证，全程不打开浏览器。
+- npm 官网 `www.npmjs.com` 在国内部分出口 IP 上会被 Cloudflare 拦成 403（`访问暂时受限 / 疑似机器人`），**代理与直连都拦**，但 `registry.npmjs.org` 正常可达（200/401）—— 读接口（`npm view` / 安装 / `whoami` / `profile get`）不依赖网页。但**发布离不开网页**：`npm publish` 会打印 `Open https://www.npmjs.com/login/`，需在该页用安全密钥确认（见 §0.1）。
+- npm 侧发布受阻的**真实瓶颈不是网络也不是凭据，而是 2FA 政策**（2026-09 起）：恢复码登录会触发 72 小时只读冻结、TOTP 认证器已停止新配置、无 TTY 环境无法发布。详见 §0.1，不要再用「恢复码当 OTP」绕。
 - 本机 git 走 `gh auth git-credential`，用的是**经典 PAT `ghp_…`**，当前 scopes 为 `admin:org, admin:public_key, delete:packages, repo, write:packages` —— **缺 `workflow`**，这是 `release.yml` 推送被拒的唯一原因。
 - Python 端本机 `twine` 已装（7.0.0；`build` 1.6.1）；`dist/` 在两端都不入库（`.gitignore`），发布前必须现构建。
 - 版本号一经上传**永久占用**，删除 release 也不能重传同名同版本；只能 bump 版本。
+
+### 0.1 npm 2FA 现状与「安全冻结」（2026-11 实测，踩过三次）
+
+npm 从 2025-09 起收紧 2FA，2026 年进一步收紧。以下三条是**真实踩坑记录**，任何一条不满足都发布不了：
+
+| 陷阱                        | 现象                                                                                        | 真实原因                                                                                                                                                              |
+| --------------------------- | ------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **把恢复码填进 OTP 提示**   | `403 Your account has been temporarily suspended due to a recent security-sensitive action` | 恢复码登录被判定为 security-sensitive action → **72 小时只读冻结**（publish / 建 token / 改组全停），**自动解除、不用开工单**；但**每用一次恢复码就重置 72 小时计时** |
+| **想用认证器 App 扫码**     | 网页设置页只有「Add Security Key」，没有 Authenticator App 选项                             | npm 已**停止新配置 TOTP**（2025-09 宣布，2026 全面生效），只剩 WebAuthn：Touch ID / Windows Hello / passkey / 硬件 key                                                |
+| **在无 TTY 环境跑 publish** | `EOTP This operation requires a one-time password`                                          | `npm publish` 需在真实终端打印 `Open https://www.npmjs.com/login/`，由浏览器完成 WebAuthn 确认；CI / agent shell / 管道里无 TTY → npm 跳过浏览器步骤直接失败          |
+
+**诊断口径（别误判）**：
+
+- `E404 ... PUT https://registry.npmjs.org/<pkg>` = **token 失效**（npm 对匿名 PUT 统一回 404，不区分「无权限」与「不存在」），不是包名被占。
+- `403 ... temporarily suspended` = 安全冻结，**任何重试都无效**，只能等。
+- 冻结期间 `whoami` / `profile get` / `npm view` / 安装**全都正常**，别拿只读探测当「已解封」。唯一判据是重跑一次 publish 看是否还是那句 403。
+
+**冻结解除后的正确发布流程**（必须人工、在有 TTY 的终端）：
+
+```bash
+# 0) 前提：能在浏览器打开 www.npmjs.com（家宽 IP 被 Cloudflare 拦时用手机热点换 IP）
+# 1) 登录（浏览器完成 WebAuthn，终端自动继续）
+npm login --registry=https://registry.npmjs.org
+# 2) 安全密钥若未配置：网页 Settings → Two-Factor Authentication → Add Security Key
+#    （Mac 可用 Touch ID 作为平台认证器，无需硬件 key）
+# 3) 发布（会再次弹浏览器确认）
+cd logging-framework/web/Observability
+npm publish --registry=https://registry.npmjs.org
+# 4) 只读验证（Agent 可代劳）
+npm view agentlog-js version --registry=https://registry.npmjs.org
+```
+
+⚠️ **发布前不要在中间插入任何 2FA 设置变更**——改 2FA 会吊销全部现有 token，导致必须重登；若重登用了恢复码，直接进入 72 小时冻结。
 
 ## 1. 一次性准备（人工，约 10 分钟）
 
